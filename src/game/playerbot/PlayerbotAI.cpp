@@ -6247,7 +6247,7 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
     else if (ExtractCommand("help", input))
         _HandleCommandHelp(input, fromPlayer);
 
-    else if (ExtractCommand("gm", input))
+    else if (fromPlayer.GetSession()->GetSecurity() > SEC_PLAYER && ExtractCommand("gm", input))
         _HandleCommandGM(input, fromPlayer);
 
     else if (ExtractCommand("reset", input))
@@ -7772,7 +7772,7 @@ void PlayerbotAI::_HandleCommandStats(std::string &text, Player &fromPlayer)
 void PlayerbotAI::_HandleCommandGM(std::string &text, Player &fromPlayer)
 {
     // Check should happen OUTSIDE this function, but this is account security we're talking about, so let's be doubly sure
-    if (!IsGMAccount())
+    if (fromPlayer.GetSession()->GetSecurity() > SEC_PLAYER)
         return; // no excuses, no warning
 
     if (text == "")
@@ -8182,7 +8182,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
         }
     }
 
-    if (IsGMAccount && (bMainHelp || ExtractCommand("gm", text)))
+    if (fromPlayer.GetSession()->GetSecurity() > SEC_PLAYER && (bMainHelp || ExtractCommand("gm", text)))
     {
         msg = _HandleCommandHelpHelper("gm", "Lists actions available to GM account level and up.");
         SendWhisper(msg, fromPlayer);
