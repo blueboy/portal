@@ -16,6 +16,7 @@ class MANGOS_DLL_SPEC PlayerbotMgr
     // static functions, available without a PlayerbotMgr instance
 public:
     static void SetInitialWorldSettings();
+    static void AutobotNamesInUseReset();
 
 public:
     PlayerbotMgr(Player * const master);

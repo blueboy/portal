@@ -3,7 +3,7 @@
 #####################################
 
 [PlayerbotConf]
-ConfVersion=2011091201
+ConfVersion=2011110501
 
 ###################################################################################################################
 # PLAYERBOTAI CONFIGURATION
@@ -67,6 +67,13 @@ ConfVersion=2011091201
 #        Default: 0 - off
 #                 1 - on
 #
+#    PlayerbotAI.AutobotNamesInUseReset
+#        Do a check at server startup to ensure that 'names in use' setting in DB is correct. Should take a while,
+#        recommend you just leave this off. You can do this manually as well with a command, but it's a relatively
+#        big drain for a live server. This should never be required, but right is right so here's the option.
+#        Default: 0 - off
+#                 1 - on
+#
 ###################################################################################################################
 
 PlayerbotAI.DisableBots = 0
@@ -86,3 +93,4 @@ PlayerbotAI.Collect.Objects = 1
 PlayerbotAI.Collect.DistanceMax = 50
 PlayerbotAI.Collect.Distance = 25
 PlayerbotAI.SellGarbage = 0
+PlayerbotAI.AutobotNamesInUseReset = 0

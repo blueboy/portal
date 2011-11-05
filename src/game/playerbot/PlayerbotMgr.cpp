@@ -26,6 +26,18 @@ void PlayerbotMgr::SetInitialWorldSettings()
     //Check playerbot config file version
     if (botConfig.GetIntDefault("ConfVersion", 0) != PLAYERBOT_CONF_VERSION)
         sLog.outError("Playerbot: Configuration file version doesn't match expected version. Some config variables may be wrong or missing.");
+
+    if (botConfig.GetBoolDefault("PlayerbotAI.AutobotNamesInUseReset", false))
+        PlayerbotMgr::AutobotNamesInUseReset();
+}
+
+void PlayerbotMgr::AutobotNamesInUseReset()
+{
+    // Let's just clean slate this
+    CharacterDatabase.DirectExecute("UPDATE playerbot_autobot_names SET in_use = 0");
+
+    // And then set it right again
+    CharacterDatabase.DirectExecute("UPDATE playerbot_autobot_names SET playerbot_autobot_names.in_use = 1 WHERE EXISTS (SELECT characters.name FROM characters WHERE playerbot_autobot_names.name = characters.name)");
 }
 
 PlayerbotMgr::PlayerbotMgr(Player* const master) : m_master(master)
