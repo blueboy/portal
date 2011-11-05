@@ -1830,7 +1830,10 @@ private:
     void _HandleCommandStats(std::string &text, Player &fromPlayer);
     void _HandleCommandHelp(std::string &text, Player &fromPlayer);
     void _HandleCommandHelp(const char* szText, Player &fromPlayer) { std::string text = szText; _HandleCommandHelp(text, fromPlayer); }
+    void _HandleCommandGM(std::string &text, Player &fromPlayer);
     std::string _HandleCommandHelpHelper(std::string sCommand, std::string sExplain, HELPERLINKABLES reqLink = HL_NONE, bool bReqLinkMultiples = false, bool bCommandShort = false);
+
+    bool IsGMAccount() { return m_bot->GetSession()->GetSecurity() > SEC_PLAYER ? true : false; }
 
     // ****** Closed Actions ********************************
     // These actions may only be called at special times.
