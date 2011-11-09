@@ -1854,6 +1854,8 @@ private:
     Player* const m_bot;
     PlayerbotClassAI* m_classAI;
 
+    bool m_bAutoBot;
+
     // ignores AI updates until time specified
     // no need to waste CPU cycles during casting etc
     time_t m_ignoreAIUpdatesUntilTime;

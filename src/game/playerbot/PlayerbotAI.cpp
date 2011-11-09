@@ -62,6 +62,7 @@ PlayerbotAI::PlayerbotAI(PlayerbotMgr* const mgr, Player* const bot) :
     m_targetGuidCommand(ObjectGuid()),
     m_taxiMaster(ObjectGuid())
 {
+    m_bAutoBot = false;
 
     // set bot state
     m_botState = BOTSTATE_NORMAL;
@@ -6210,7 +6211,7 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
 
     // if in the middle of a trade, and player asks for an item/money
     // WARNING: This makes it so you can't use any other commands during a trade!
-    if (m_bot->GetTrader() && m_bot->GetTrader()->GetObjectGuid() == fromPlayer.GetObjectGuid())
+    if (!m_bAutoBot && m_bot->GetTrader() && m_bot->GetTrader()->GetObjectGuid() == fromPlayer.GetObjectGuid())
     {
         uint32 copper = extractMoney(text);
         if (copper > 0)
@@ -6266,46 +6267,46 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
     else if (ExtractCommand("cast", input, true)) // true -> "cast" OR "c"
         _HandleCommandCast(input, fromPlayer);
 
-    else if (ExtractCommand("sell", input))
+    else if (!m_bAutoBot && ExtractCommand("sell", input))
         _HandleCommandSell(input, fromPlayer);
 
-    else if (ExtractCommand("buy", input))
+    else if (!m_bAutoBot && ExtractCommand("buy", input))
         _HandleCommandBuy(input, fromPlayer);
 
-    else if (ExtractCommand("drop", input))
+    else if (!m_bAutoBot && ExtractCommand("drop", input))
         _HandleCommandDrop(input, fromPlayer);
 
-    else if (ExtractCommand("repair", input))
+    else if (!m_bAutoBot && ExtractCommand("repair", input))
         _HandleCommandRepair(input, fromPlayer);
 
-    else if (ExtractCommand("auction", input))
+    else if (!m_bAutoBot && ExtractCommand("auction", input))
         _HandleCommandAuction(input, fromPlayer);
 
-    else if (ExtractCommand("bank", input))
+    else if (!m_bAutoBot && ExtractCommand("bank", input))
         _HandleCommandBank(input, fromPlayer);
 
-    else if (ExtractCommand("talent", input))
+    else if (!m_bAutoBot && ExtractCommand("talent", input))
         _HandleCommandTalent(input, fromPlayer);
 
-    else if (ExtractCommand("use", input, true)) // true -> "use" OR "u"
+    else if (!m_bAutoBot && ExtractCommand("use", input, true)) // true -> "use" OR "u"
         _HandleCommandUse(input, fromPlayer);
 
-    else if (ExtractCommand("equip", input, true)) // true -> "equip" OR "e"
+    else if (!m_bAutoBot && ExtractCommand("equip", input, true)) // true -> "equip" OR "e"
         _HandleCommandEquip(input, fromPlayer);
 
     // find project: 20:50 02/12/10 rev.4 item in world and wait until ordered to follow
-    else if (ExtractCommand("find", input, true)) // true -> "find" OR "f"
+    else if (!m_bAutoBot && ExtractCommand("find", input, true)) // true -> "find" OR "f"
         _HandleCommandFind(input, fromPlayer);
 
     // get project: 20:50 02/12/10 rev.4 compact edition, handles multiple linked gameobject & improves visuals
-    else if (ExtractCommand("get", input, true)) // true -> "get" OR "g"
+    else if (!m_bAutoBot && ExtractCommand("get", input, true)) // true -> "get" OR "g"
         _HandleCommandGet(input, fromPlayer);
 
     // Handle all collection related commands here
-    else if (ExtractCommand("collect", input))
+    else if (!m_bAutoBot && ExtractCommand("collect", input))
         _HandleCommandCollect(input, fromPlayer);
 
-    else if (ExtractCommand("quest", input))
+    else if (!m_bAutoBot && ExtractCommand("quest", input))
         _HandleCommandQuest(input, fromPlayer);
 
     else if (ExtractCommand("pet", input))
@@ -6315,18 +6316,18 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
         _HandleCommandSpells(input, fromPlayer);
 
     // survey project: 20:50 02/12/10 rev.4 compact edition
-    else if (ExtractCommand("survey", input))
+    else if (!m_bAutoBot && ExtractCommand("survey", input))
         _HandleCommandSurvey(input, fromPlayer);
 
     // Handle class & professions training:
-    else if (ExtractCommand("skill", input))
+    else if (!m_bAutoBot && ExtractCommand("skill", input))
         _HandleCommandSkill(input, fromPlayer);
 
     // stats project: 11:30 15/12/10 rev.2 display bot statistics
     else if (ExtractCommand("stats", input))
         _HandleCommandStats(input, fromPlayer);
 
-    else
+    else if (!m_bAutoBot)
     {
         // if this looks like an item link, reward item it completed quest and talking to NPC
         std::list<uint32> itemIds;
@@ -7880,7 +7881,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("use", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("use", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("use", "I will use the linked item.", HL_ITEM), fromPlayer);
 
@@ -7890,7 +7891,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("equip", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("equip", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("equip", "I will equip the linked item(s).", HL_ITEM, true), fromPlayer);
 
@@ -7930,7 +7931,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("survey", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("survey", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("survey", "Lists all available game objects near me."), fromPlayer);
 
@@ -7940,7 +7941,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("find", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("find", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("find", "I will find said game object, walk right up to it, and wait.", HL_GAMEOBJECT), fromPlayer);
 
@@ -7950,7 +7951,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("get", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("get", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("get", "I will get said game object and return to your side.", HL_GAMEOBJECT), fromPlayer);
 
@@ -7960,7 +7961,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("quest", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("quest", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("quest", "Lists my current quests."), fromPlayer);
 
@@ -8030,7 +8031,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("collect", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("collect", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("collect", "Tells you what my current collect status is. Also lists possible options."), fromPlayer);
         SendWhisper(_HandleCommandHelpHelper("collect", "Sets what I collect. Obviously the 'none' option should be used alone, but all the others can be mixed.", HL_OPTION, true), fromPlayer);
@@ -8041,7 +8042,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("sell", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("sell", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("sell", "Adds this to my 'for sale' list.", HL_ITEM, true), fromPlayer);
 
@@ -8051,7 +8052,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("buy", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("buy", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("buy", "Adds this to my 'purchase' list.", HL_ITEM, true), fromPlayer);
 
@@ -8061,7 +8062,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("drop", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("drop", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("drop", "Drops the linked item(s). Permanently.", HL_ITEM, true), fromPlayer);
 
@@ -8071,7 +8072,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("auction", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("auction", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("auction", "Lists all my active auctions. With pretty little links and such. Hi hi hi... I'm gonna be sooo rich!"), fromPlayer);
 
@@ -8088,7 +8089,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("repair", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("repair", text)))
     {
         if (!bMainHelp && text == "")
             SendWhisper(_HandleCommandHelpHelper("repair", "This by itself is not a valid command. Just so you know. To be used with a subcommand, such as..."), fromPlayer);
@@ -8105,7 +8106,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("talent", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("talent", text)))
     {
         msg = _HandleCommandHelpHelper("talent", "Lists my talents, glyphs, unspent talent points and the cost to reset all talents.");
         SendWhisper(msg, fromPlayer);
@@ -8122,7 +8123,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
         }
         if (!bMainHelp) return;
     }
-    if (bMainHelp || ExtractCommand("bank", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("bank", text)))
     {
         SendWhisper(_HandleCommandHelpHelper("bank", "Gives you my bank balance. I thought that was private."), fromPlayer);
 
@@ -8139,7 +8140,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("skill", text))
+    if (!m_bAutoBot && (bMainHelp || ExtractCommand("skill", text)))
     {
         msg = _HandleCommandHelpHelper("skill", "Lists my primary professions.");
         SendWhisper(msg, fromPlayer);
