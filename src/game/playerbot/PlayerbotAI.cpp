@@ -1240,7 +1240,8 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 }
 
                 ChatHandler ch(m_bot->GetTrader());
-                out.str("Items I have but cannot trade:");
+                out.str("");
+                out << "Items I have but cannot trade:";
                 uint32 count = 0;
                 for (std::list<std::string>::iterator iter = lsItemsUntradable.begin(); iter != lsItemsUntradable.end(); iter++)
                 {
@@ -1256,9 +1257,10 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 if (count > 0)
                     ch.SendSysMessage(out.str().c_str());
 
-                out.str("I could give you:");
+                out.str("");
+                out << "I could give you:";
                 count = 0;
-                for (std::list<std::string>::iterator iter = lsItemsUntradable.begin(); iter != lsItemsUntradable.end(); iter++)
+                for (std::list<std::string>::iterator iter = lsItemsTradable.begin(); iter != lsItemsUntradable.end(); iter++)
                 {
                     out << (*iter);
                     // Why this roundabout way of posting max 20 items per whisper? To keep the list scrollable.
@@ -6984,7 +6986,7 @@ void PlayerbotAI::_HandleCommandCollect(std::string &text, Player &fromPlayer)
             }
             else
             {
-				m_collectDist = m_mgr->m_confCollectDistanceMax;
+                                m_collectDist = m_mgr->m_confCollectDistanceMax;
                 std::stringstream oss;
                 oss << "I will now collect items within " << m_mgr->m_confCollectDistanceMax << " yards. " << distance << " yards is just too far away.",
                 SendWhisper(oss.str(), fromPlayer);
@@ -6999,7 +7001,7 @@ void PlayerbotAI::_HandleCommandCollect(std::string &text, Player &fromPlayer)
         else
         {
             std::ostringstream oss;
-			oss << "Collect <collectable(s)>: none | distance:<1-" << m_mgr->m_confCollectDistanceMax << ">, combat, loot, quest, profession, objects";
+                        oss << "Collect <collectable(s)>: none | distance:<1-" << m_mgr->m_confCollectDistanceMax << ">, combat, loot, quest, profession, objects";
             if (m_bot->HasSkill(SKILL_SKINNING))
                 oss << ", skin";
             // TODO: perhaps change the command syntax, this way may be lacking in ease of use
