@@ -359,10 +359,9 @@ uint32 PlayerbotAI::initPetSpell(uint32 spellIconId)
 }
 
 /*
- * Send a list of equipment that is in bot's inventor that is currently unequipped.
+ * Send list of the equipment in bot's inventory not currently equipped.
  * This is called when the master is inspecting the bot.
  */
-
 void PlayerbotAI::SendNotEquipList(Player& /*player*/)
 {
     // find all unequipped items and put them in
@@ -431,8 +430,8 @@ void PlayerbotAI::SendNotEquipList(Player& /*player*/)
             }
     }
 
-    TellMaster("Here's all the items in my inventory that I can equip.");
     ChatHandler ch(GetMaster());
+    bool bAnyEquippable = false;
 
     const std::string descr[] = { "head", "neck", "shoulders", "body", "chest",
                                   "waist", "legs", "feet", "wrists", "hands", "finger1", "finger2",
@@ -444,24 +443,32 @@ void PlayerbotAI::SendNotEquipList(Player& /*player*/)
     {
         if (equip[equipSlot] == NULL)
             continue;
+
+        if (!bAnyEquippable)
+        {
+            TellMaster("Here's all the items in my inventory that I can equip:");
+            bAnyEquippable = true;
+        }
+
         std::list<Item*>* itemListForEqSlot = equip[equipSlot];
         std::ostringstream out;
         out << descr[equipSlot] << ": ";
         for (std::list<Item*>::iterator it = itemListForEqSlot->begin(); it != itemListForEqSlot->end(); ++it)
         {
-            const ItemPrototype* const pItemProto = (*it)->GetProto();
-
-            std::string itemName = pItemProto->Name1;
-            ItemLocalization(itemName, pItemProto->ItemId);
-
-            out << " |cffffffff|Hitem:" << pItemProto->ItemId
-                << ":0:0:0:0:0:0:0" << "|h[" << itemName
-                << "]|h|r";
+            if ((*it))
+                MakeItemLink((*it), out, true);
+            //const ItemPrototype* const pItemProto = (*it)->GetProto();
+            //std::string itemName = pItemProto->Name1;
+            //ItemLocalization(itemName, pItemProto->ItemId);
+            //out << " |cffffffff|Hitem:" << pItemProto->ItemId << ":0:0:0:0:0:0:0" << "|h[" << itemName << "]|h|r";
         }
         ch.SendSysMessage(out.str().c_str());
 
         delete itemListForEqSlot; // delete list of Item*
     }
+
+    if (!bAnyEquippable)
+        TellMaster("There are no items in my inventory that I can equip.");
 }
 
 void PlayerbotAI::SendQuestNeedList()
@@ -1180,23 +1187,30 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 
                 if (!canObeyCommandFrom(*(m_bot->GetTrader())))
                 {
+                    // TODO: Really? What if I give a bot all my junk so it's inventory is full when a nice green/blue/purple comes along?
                     SendWhisper("I'm not allowed to trade you any of my items, but you are free to give me money or items.", *(m_bot->GetTrader()));
                     return;
                 }
 
                 // list out items available for trade
                 std::ostringstream out;
+                std::list<std::string> lsItemsTradable;
+                std::list<std::string> lsItemsUntradable;
 
-                out << "In my main backpack:";
                 // list out items in main backpack
                 for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; slot++)
                 {
                     const Item* const pItem = m_bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
                     if (pItem)
+                    {
                         MakeItemLink(pItem, out, true);
+                        if (pItem->CanBeTraded())
+                            lsItemsTradable.push_back(out.str());
+                        else
+                            lsItemsUntradable.push_back(out.str());
+                        out.str("");
+                    }
                 }
-                ChatHandler ch(m_bot->GetTrader());
-                ch.SendSysMessage(out.str().c_str());
 
                 // list out items in other removable backpacks
                 for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
@@ -1204,22 +1218,61 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                     const Bag* const pBag = (Bag *) m_bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
                     if (pBag)
                     {
-                        std::ostringstream outbag;
-                        outbag << "In my ";
-                        const ItemPrototype* const pBagProto = pBag->GetProto();
-                        std::string bagName = pBagProto->Name1;
-                        ItemLocalization(bagName, pBagProto->ItemId);
-                        outbag << bagName << ":";
+                        // Very cool, but unnecessary
+                        //const ItemPrototype* const pBagProto = pBag->GetProto();
+                        //std::string bagName = pBagProto->Name1;
+                        //ItemLocalization(bagName, pBagProto->ItemId);
 
                         for (uint8 slot = 0; slot < pBag->GetBagSize(); ++slot)
                         {
                             const Item* const pItem = m_bot->GetItemByPos(bag, slot);
                             if (pItem)
-                                MakeItemLink(pItem, outbag, true);
+                            {
+                                MakeItemLink(pItem, out, true);
+                                if (pItem->CanBeTraded())
+                                    lsItemsTradable.push_back(out.str());
+                                else
+                                    lsItemsUntradable.push_back(out.str());
+                                out.str("");
+                            }
                         }
-                        ch.SendSysMessage(outbag.str().c_str());
                     }
                 }
+
+                ChatHandler ch(m_bot->GetTrader());
+                out.str("Items I have but cannot trade:");
+                uint32 count = 0;
+                for (std::list<std::string>::iterator iter = lsItemsUntradable.begin(); iter != lsItemsUntradable.end(); iter++)
+                {
+                    out << (*iter);
+                    // Why this roundabout way of posting max 20 items per whisper? To keep the list scrollable.
+                    count++;
+                    if (count % 20 == 0)
+                    {
+                        ch.SendSysMessage(out.str().c_str());
+                        out.str("");
+                    }
+                }
+                if (count > 0)
+                    ch.SendSysMessage(out.str().c_str());
+
+                out.str("I could give you:");
+                count = 0;
+                for (std::list<std::string>::iterator iter = lsItemsUntradable.begin(); iter != lsItemsUntradable.end(); iter++)
+                {
+                    out << (*iter);
+                    // Why this roundabout way of posting max 20 items per whisper? To keep the list scrollable.
+                    count++;
+                    if (count % 20 == 0)
+                    {
+                        ch.SendSysMessage(out.str().c_str());
+                        out.str("");
+                    }
+                }
+                if (count > 0)
+                    ch.SendSysMessage(out.str().c_str());
+                else
+                    ch.SendSysMessage("I have nothing to give you.");
 
                 // calculate how much money bot has
                 uint32 copper = m_bot->GetMoney();
@@ -1229,12 +1282,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 copper -= (silver * 100);
 
                 // send bot the message
-                std::ostringstream whisper;
-                whisper << "I have |cff00ff00" << gold
-                        << "|r|cfffffc00g|r|cff00ff00" << silver
-                        << "|r|cffcdcdcds|r|cff00ff00" << copper
-                        << "|r|cffffd333c|r";
-                SendWhisper(whisper.str().c_str(), *(m_bot->GetTrader()));
+                out.str("");
+                out << "I have |cff00ff00" << gold
+                    << "|r|cfffffc00g|r|cff00ff00" << silver
+                    << "|r|cffcdcdcds|r|cff00ff00" << copper
+                    << "|r|cffffd333c|r";
+                SendWhisper(out.str().c_str(), *(m_bot->GetTrader()));
             }
             return;
         }
@@ -6253,8 +6306,6 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
 
     else if (ExtractCommand("reset", input))
         _HandleCommandReset(input, fromPlayer);
-    else if (ExtractCommand("report", input))
-        _HandleCommandReport(input, fromPlayer);
     else if (ExtractCommand("orders", input))
         _HandleCommandOrders(input, fromPlayer);
     else if (ExtractCommand("follow", input) || ExtractCommand("come", input))
@@ -6444,16 +6495,6 @@ void PlayerbotAI::_HandleCommandReset(std::string &text, Player &fromPlayer)
     m_lootCurrent = ObjectGuid();
     m_targetCombat = 0;
     ClearActiveTalentSpec();
-}
-
-void PlayerbotAI::_HandleCommandReport(std::string &text, Player &fromPlayer)
-{
-    if (text != "")
-    {
-        SendWhisper("report cannot have a subcommand.", fromPlayer);
-        return;
-    }
-    SendQuestNeedList();
 }
 
 void PlayerbotAI::_HandleCommandOrders(std::string &text, Player &fromPlayer)
@@ -7044,6 +7085,10 @@ void PlayerbotAI::_HandleCommandQuest(std::string &text, Player &fromPlayer)
     {
         m_tasks.push_back(std::pair<enum TaskFlags, uint32>(LIST_QUEST, 0));
         m_findNPC.push_back(UNIT_NPC_FLAG_QUESTGIVER);
+    }
+    else if (ExtractCommand("report", text))
+    {
+        SendQuestNeedList();
     }
     else if (ExtractCommand("end", text, true)) // true -> "quest end" OR "quest e"
     {
@@ -7911,16 +7956,6 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             return;
         }
     }
-    if (bMainHelp || ExtractCommand("report", text))
-    {
-        SendWhisper(_HandleCommandHelpHelper("report", "This will give you a full report of all the items, creatures or gameobjects needed to finish my quests."), fromPlayer);
-
-        if (!bMainHelp)
-        {
-            if (text != "") SendWhisper(sInvalidSubcommand, fromPlayer);
-            return;
-        }
-    }
     if (bMainHelp || ExtractCommand("stats", text))
     {
         SendWhisper(_HandleCommandHelpHelper("stats", "This will inform you of my wealth, free bag slots and estimated equipment repair costs."), fromPlayer);
@@ -7971,12 +8006,14 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             SendWhisper(_HandleCommandHelpHelper("quest drop", "Removes this quest from my quest log.", HL_QUEST), fromPlayer);
             SendWhisper(_HandleCommandHelpHelper("quest end", "Turns in my completed quests."), fromPlayer);
             SendWhisper(_HandleCommandHelpHelper("quest list", "Lists the quests offered to me by this target."), fromPlayer);
+            SendWhisper(_HandleCommandHelpHelper("quest report", "This will give you a full report of all the items, creatures or gameobjects I still need to finish my quests.", HL_QUEST), fromPlayer);
 
             // Catches all valid subcommands, also placeholders for potential future sub-subcommands
             if (ExtractCommand("add", text, true)) {}
             else if(ExtractCommand("drop", text, true)) {}
             else if(ExtractCommand("end", text, true)) {}
             else if (ExtractCommand("list", text, true)) {}
+            else if (ExtractCommand("report", text, true)) {}
 
             if (text != "") SendWhisper(sInvalidSubcommand, fromPlayer);
             return;
@@ -8172,8 +8209,8 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             // Catches all valid subcommands, also placeholders for potential future sub-subcommands
             if (ExtractCommand("check", text))
             {
-                SendWhisper(_HandleCommandHelpHelper("gm check autobot", "Lists autobot mechanics you can run a check on.");
-                SendWhisper(_HandleCommandHelpHelper("gm check talent", "Lists talent mechanics you can run a check on.");
+                SendWhisper(_HandleCommandHelpHelper("gm check autobot", "Lists autobot mechanics you can run a check on."), fromPlayer);
+                SendWhisper(_HandleCommandHelpHelper("gm check talent", "Lists talent mechanics you can run a check on."), fromPlayer);
 
                 if (ExtractCommand("autobot", text))
                 {
@@ -8186,7 +8223,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
                 }
                 else if (ExtractCommand("talent", text))
                 {
-                    SendWhisper(_HandleCommandHelpHelper("gm check talent spec", "Checks the talent spec database for various errors. Only the first error (if any) is returned.");
+                    SendWhisper(_HandleCommandHelpHelper("gm check talent spec", "Checks the talent spec database for various errors. Only the first error (if any) is returned."), fromPlayer);
 
                     if (ExtractCommand("spec", text)) {}
 
