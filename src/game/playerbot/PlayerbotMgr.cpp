@@ -1213,3 +1213,177 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
     }
     return true;
 }
+
+bool ChatHandler::HandleAutoBotCommand(char* args)
+{
+    if (!(m_session->GetSecurity() > SEC_PLAYER))
+        if (botConfig.GetBoolDefault("PlayerbotAI.DisableBots", false))
+        {
+            PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
+            SetSentErrorMessage(true);
+            return false;
+        }
+
+    if (!m_session)
+    {
+        PSendSysMessage("|cffff0000You may only add bots from an active session");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (!*args)
+    {
+        //PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
+        PSendSysMessage("|cffff0000Invalid arguments for .autobot command.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // TODO: fix this function. For now, don't open a gaping security hole
+    PSendSysMessage("|cffff0000.autobot command not functional yet.");
+    SetSentErrorMessage(true);
+    return false;
+
+    /* ** Cool code, will be needed in a version later on, but name is NOT one of the arguments for .autobot
+    char *cmd = strtok ((char *) args, " ");
+    char *charname = strtok (NULL, " ");
+    if (!cmd || !charname)
+    {
+        PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::string cmdStr = cmd;
+    std::string charnameStr = charname;
+
+    if (!normalizePlayerName(charnameStr))
+        return false;
+
+    ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(charnameStr.c_str());
+    if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
+    {
+        SendSysMessage(LANG_PLAYER_NOT_FOUND);
+        SetSentErrorMessage(true);
+        return false;
+    }
+    */
+
+    // accountId will NEVER be player's accountId for AutoBot - must always be 1 (to be replaced with playerbotai.conf setting)
+    //uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    //if (accountId != m_session->GetAccountId())
+    //{
+    //    PSendSysMessage("|cffff0000You may only add bots from the same account.");
+    //    SetSentErrorMessage(true);
+    //    return false;
+    //}
+
+    // TODO: Will this really work with the regular PlayerbotMgr?
+    // create the playerbot manager if it doesn't already exist
+    PlayerbotMgr* mgr = m_session->GetPlayer()->GetPlayerbotMgr();
+    if (!mgr)
+    {
+        mgr = new PlayerbotMgr(m_session->GetPlayer());
+        m_session->GetPlayer()->SetPlayerbotMgr(mgr);
+    }
+
+    /** This method will never work, account == 1 for autobots. Always.
+    QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
+    if (resultchar)
+    {
+        Field *fields = resultchar->Fetch();
+        int acctcharcount = fields[0].GetUInt32();
+        int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
+        if (!(m_session->GetSecurity() > SEC_PLAYER))
+            if (acctcharcount > maxnum && (cmdStr == "add" || cmdStr == "login"))
+            {
+                PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
+                SetSentErrorMessage(true);
+                delete resultchar;
+                return false;
+            }
+        delete resultchar;
+    }
+    */
+
+    // TODO: Work out .autobot command structure and implement below (and above)
+
+    // add. seems likely.
+    //if (cmdStr == "add" || cmdStr == "login")
+    //{
+    //    if (mgr->GetPlayerBot(guid))
+    //    {
+    //        PSendSysMessage("Bot already exists in world.");
+    //        SetSentErrorMessage(true);
+    //        return false;
+    //    }
+    //    CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
+    //    mgr->AddPlayerBot(guid);
+    //    PSendSysMessage("Bot added successfully.");
+    //}
+
+    // remove. also likely.
+    //else if (cmdStr == "remove" || cmdStr == "logout")
+    //{
+    //    if (!mgr->GetPlayerBot(guid))
+    //    {
+    //        PSendSysMessage("|cffff0000Bot can not be removed because bot does not exist in world.");
+    //        SetSentErrorMessage(true);
+    //        return false;
+    //    }
+    //    CharacterDatabase.DirectPExecute("UPDATE characters SET online = 0 WHERE guid = '%u'", guid.GetCounter());
+    //    mgr->LogoutPlayerBot(guid);
+    //    PSendSysMessage("Bot removed successfully.");
+    //}
+
+    // combatorder. tank, yes. Heal, yes.
+    // Assist, yes (DPS) - WITHOUT TARGET. Automatically select tank, if multiple, tank with least assists.
+    // Protect, no - AUTOMATICALLY protect healer. If multiple, protect healer with least protects.
+    //else if (cmdStr == "co" || cmdStr == "combatorder")
+    //{
+    //    Unit *target = NULL;
+    //    char *orderChar = strtok(NULL, " ");
+    //    if (!orderChar)
+    //    {
+    //        PSendSysMessage("|cffff0000Syntax error:|cffffffff .bot co <botName> <order=reset|tank|assist|heal|protect> [targetPlayer]");
+    //        SetSentErrorMessage(true);
+    //        return false;
+    //    }
+    //    std::string orderStr = orderChar;
+    //    if (orderStr == "protect" || orderStr == "assist")
+    //    {
+    //        char *targetChar = strtok(NULL, " ");
+    //        ObjectGuid targetGUID = m_session->GetPlayer()->GetSelectionGuid();
+    //        if (!targetChar && !targetGUID)
+    //        {
+    //            PSendSysMessage("|cffff0000Combat orders protect and assist expect a target either by selection or by giving target player in command string!");
+    //            SetSentErrorMessage(true);
+    //            return false;
+    //        }
+    //        if (targetChar)
+    //        {
+    //            std::string targetStr = targetChar;
+    //            ObjectGuid targ_guid = sObjectMgr.GetPlayerGuidByName(targetStr.c_str());
+
+    //            targetGUID.Set(targ_guid.GetRawValue());
+    //        }
+    //        target = ObjectAccessor::GetUnit(*m_session->GetPlayer(), targetGUID);
+    //        if (!target)
+    //        {
+    //            PSendSysMessage("|cffff0000Invalid target for combat order protect or assist!");
+    //            SetSentErrorMessage(true);
+    //            return false;
+    //        }
+    //    }
+    //    if (mgr->GetPlayerBot(guid) == NULL)
+    //    {
+    //        PSendSysMessage("|cffff0000Bot can not receive combat order because bot does not exist in world.");
+    //        SetSentErrorMessage(true);
+    //        return false;
+    //    }
+    //    mgr->GetPlayerBot(guid)->GetPlayerbotAI()->SetCombatOrderByStr(orderStr, target);
+    //}
+
+    //return true;
+    return false;
+}
