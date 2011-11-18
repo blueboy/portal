@@ -1529,7 +1529,7 @@ bool PlayerbotMgr::_CreateCharacterAutobot()
     //`purpose` int(11) unsigned NOT NULL
     //`priority` bit(1) NOT NULL
     //`in_use` bit(1) NOT NULL
-    QueryResult *result = CharacterDatabase.Query("SELECT COUNT(*) WHERE in_use = 0 AND priority = 1"); // TODO: Expand to use 'WHERE ... AND gender, race, class, purpose
+    QueryResult *result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 1"); // TODO: Expand to use 'WHERE ... AND gender, race, class, purpose
     if (result)
     {
         Field *fields = result->Fetch();
@@ -1540,7 +1540,7 @@ bool PlayerbotMgr::_CreateCharacterAutobot()
         if (count > 0)
         {
             // TODO: Randomize
-            result = CharacterDatabase.Query("SELECT name WHERE in_use = 0 AND priority = 1 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
+            result = CharacterDatabase.Query("SELECT name FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 1 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
             fields = result->Fetch();
             name = fields[0].GetCppString();
 
@@ -1549,7 +1549,7 @@ bool PlayerbotMgr::_CreateCharacterAutobot()
         else
         {
             // TODO: Randomize
-            result = CharacterDatabase.Query("SELECT COUNT(*) WHERE in_use = 0 AND priority = 0"); // TODO: copy modified query's WHERE clause from above
+            result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 0"); // TODO: copy modified query's WHERE clause from above
             if (result)
             {
                 fields = result->Fetch();
@@ -1560,7 +1560,7 @@ bool PlayerbotMgr::_CreateCharacterAutobot()
                 if (count > 0)
                 {
                     // TODO: Randomize
-                    result = CharacterDatabase.Query("SELECT name WHERE in_use = 0 AND priority = 0 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
+                    result = CharacterDatabase.Query("SELECT name FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 0 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
                     fields = result->Fetch();
                     name = fields[0].GetCppString();
 
