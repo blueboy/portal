@@ -64,6 +64,8 @@ public:
     uint32 m_confCollectDistanceMax;
 
 private:
+    bool _CreateCharacterAutobot();
+
     Player* const m_master;
     PlayerBotMap m_playerBots;
 };

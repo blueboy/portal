@@ -8235,7 +8235,7 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
 
                 if (ExtractCommand("autobot", text))
                 {
-                    SendWhisper(_HandleCommandHelpHelper("gm check autobot names", "Checks the autobot names, resetting its 'in_use' column in the database. May freeze the server for a little while.");
+                    SendWhisper(_HandleCommandHelpHelper("gm check autobot names", "Checks the autobot names, resetting its 'in_use' column in the database. May freeze the server for a little while."), fromPlayer);
 
                     if (ExtractCommand("names", text)) {}
 

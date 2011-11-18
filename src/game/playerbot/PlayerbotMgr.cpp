@@ -1239,20 +1239,15 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         return false;
     }
 
-    // TODO: fix this function. For now, don't open a gaping security hole
-    PSendSysMessage("|cffff0000.autobot command not functional yet.");
-    SetSentErrorMessage(true);
-    return false;
+    std::string cmd = args;
+    std::string subcommand = "";
+    if (cmd.find(' '))
+    subcommand = cmd.substr(cmd.find(' ', 1)+1);
+    cmd = cmd.substr(0, cmd.find(' ', 1));
 
     /* ** Cool code, will be needed in a version later on, but name is NOT one of the arguments for .autobot
     char *cmd = strtok ((char *) args, " ");
     char *charname = strtok (NULL, " ");
-    if (!cmd || !charname)
-    {
-        PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
-        SetSentErrorMessage(true);
-        return false;
-    }
 
     std::string cmdStr = cmd;
     std::string charnameStr = charname;
@@ -1308,9 +1303,14 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 
     // TODO: Work out .autobot command structure and implement below (and above)
 
-    // add. seems likely.
-    //if (cmdStr == "add" || cmdStr == "login")
-    //{
+    if (0 == cmd.compare("add"))
+    {
+        //if (subcommand == "")
+        //{
+        //    PSendSysMessage("|cffff0000.autobot add sub sub subcommands required");
+        //    SetSentErrorMessage(true);
+        //    return false;
+        //}
     //    if (mgr->GetPlayerBot(guid))
     //    {
     //        PSendSysMessage("Bot already exists in world.");
@@ -1319,8 +1319,14 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
     //    }
     //    CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
     //    mgr->AddPlayerBot(guid);
-    //    PSendSysMessage("Bot added successfully.");
-    //}
+        PSendSysMessage("Bot added successfully.");
+        return true;
+    }
+
+    // TODO: fix this function. For now, don't open a gaping security hole
+    PSendSysMessage("|cffff0000.autobot command not functional yet.");
+    SetSentErrorMessage(true);
+    return false;
 
     // remove. also likely.
     //else if (cmdStr == "remove" || cmdStr == "logout")
@@ -1339,6 +1345,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
     // combatorder. tank, yes. Heal, yes.
     // Assist, yes (DPS) - WITHOUT TARGET. Automatically select tank, if multiple, tank with least assists.
     // Protect, no - AUTOMATICALLY protect healer. If multiple, protect healer with least protects.
+    // Reset, hell no. You want a reset, you slave away working on your AltBot.
     //else if (cmdStr == "co" || cmdStr == "combatorder")
     //{
     //    Unit *target = NULL;
@@ -1386,4 +1393,492 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 
     //return true;
     return false;
+}
+
+/**
+* _CreateCharacterAutobot creates a character out of thin air, to be used as an autobot.
+* A lot of the code was shamelessly copied from WorldSession::HandleCharCreateOpcode (CharacterHandler.cpp)
+*
+* return bool - we successfully created a character, true or false?
+*/
+bool PlayerbotMgr::_CreateCharacterAutobot()
+{
+    // This is the black box you now need to decipher. Good luck, me.
+    WorldPacket recv_data ();
+
+    std::string name = "";
+
+    // Select a random gender. GENDER_NONE is not an option for players.
+    uint8 gender = ( (rand() % 2) == 1) ? GENDER_MALE : GENDER_FEMALE;
+
+    // Select a random class.
+    // TODO: Pick class according to purpose. Mages might not make the best tanks, could probably do better than Rogues for healing.
+    uint8 class_;
+    switch (rand()%10)
+    {
+    case 0:
+        class_ = CLASS_WARRIOR; // Because, clearly, everyone else is not in a war.
+        break;
+
+    case 1:
+        class_ = CLASS_PALADIN; // Tankadin, Retadin, Holydin, all popular in WoW. Must be because they're everyone's Pal-adin.
+        break;
+
+    case 2:
+        class_ = CLASS_HUNTER; // For those who love critters just a wee bit too much. Well, I hope it's only a wee bit.
+        break;
+
+    case 3:
+        class_ = CLASS_ROGUE; // Because you want back stabber by your side. And not behind you. Not to be mistaken for make-up.
+        break;
+
+    case 4:
+        class_ = CLASS_PRIEST; // Whether they're melting faces or healing them, your life is in their hands.
+        break;
+
+    case 5:
+        class_ = CLASS_DEATH_KNIGHT; // Because DPS is so much more hardcore when your class has 'death' in it.
+        break;
+
+    case 6:
+        class_ = CLASS_SHAMAN; // If you love having special poles sticking in the ground.
+        break;
+
+    case 7:
+        class_ = CLASS_MAGE; // Because according to the dictionary only mages can use magic. ... Right?
+        break;
+
+    case 8:
+        class_ = CLASS_WARLOCK; // For those who would love to see their enemy die after they've killed you.
+        break;
+
+    case 9:
+        class_ = CLASS_DRUID; // Because no other class has a tank, melee dps, spell dps AND healer mode!
+        break;
+
+    default:
+        DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] Failed to select a class. The impossible has happened. THE END IS NIGH!");
+        return false;
+    }
+
+    // Select a random race.
+    // TODO: Pick a valid race based on class.
+    uint8 race_;
+    switch ((rand()%10))
+    {
+    case 0:
+        race_ = RACE_HUMAN; // It's pronounced WHO-MAN, y'know?
+        break;
+
+    case 1:
+        race_ = RACE_DWARF; // Does the world really need more dorfs?
+        break;
+
+    case 2:
+        race_ = RACE_NIGHTELF; // What happened to the day elves, I wonder?
+        break;
+
+    case 3:
+        race_ = RACE_GNOME; // Only gnomes could make engineering more error-prone than goblins.
+        break;
+
+    case 4:
+        race_ = RACE_DRAENEI; // Alien squidfaces in WoW. Who saw that one coming?
+        break;
+
+    case 5:
+        race_ = RACE_ORC; // Nothing against orcs, they're all just so very... green.
+        break;
+
+    case 6:
+        race_ = RACE_UNDEAD; // UN-dead. Doesn't that describe all of us? Hope so for your sake...
+        break;
+
+    case 7:
+        race_ = RACE_TAUREN; // Moo.
+        break;
+
+    case 8:
+        race_ = RACE_TROLL; // Trolls like war a lot for a race who likes to 'take it easy, mon'.
+        break;
+
+    case 9:
+        race_ = RACE_BLOODELF; // Elves whose defining trait is that they have blood. Genius.
+        break;
+
+    default:
+        DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] Failed to select a race. The impossible has happened. THE END IS NIGH!");
+        return false;
+    }
+
+    /** This would've been an awesome bit of SQL writing to select a name. Unfortunately it took me 17.5 seconds to run.
+    * The solution (far) below may be a bit less perfect (in reality, and quite a bit less perfect in theory) but at least it's fast.
+    SELECT t1.`name`
+    FROM playerbot_autobot_names AS t1, characters
+    WHERE t1.`name` NOT IN
+    (
+            SELECT t1.name
+            FROM playerbot_autobot_names as t1
+            WHERE t1.in_use = 0 AND t1.name = characters.name
+    )
+    ORDER BY
+    RAND() ASC
+    LIMIT 1
+    */
+
+    // Possible variables to check for when selecting a name.
+    //`name_id` mediumint(8) NOT NULL AUTO_INCREMENT UNIQUE
+    //`name` varchar(13) NOT NULL UNIQUE
+    //`gender` tinyint(3) unsigned NOT NULL
+    //`race` smallint(5) unsigned NOT NULL
+    //`class` smallint(5) unsigned NOT NULL
+    //`purpose` int(11) unsigned NOT NULL
+    //`priority` bit(1) NOT NULL
+    //`in_use` bit(1) NOT NULL
+    QueryResult *result = CharacterDatabase.Query("SELECT COUNT(*) WHERE in_use = 0 AND priority = 1"); // TODO: Expand to use 'WHERE ... AND gender, race, class, purpose
+    if (result)
+    {
+        Field *fields = result->Fetch();
+        uint32 count = fields[0].GetUInt32();
+
+        delete result;
+
+        if (count > 0)
+        {
+            // TODO: Randomize
+            result = CharacterDatabase.Query("SELECT name WHERE in_use = 0 AND priority = 1 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
+            fields = result->Fetch();
+            name = fields[0].GetCppString();
+
+            delete result;
+        }
+        else
+        {
+            // TODO: Randomize
+            result = CharacterDatabase.Query("SELECT COUNT(*) WHERE in_use = 0 AND priority = 0"); // TODO: copy modified query's WHERE clause from above
+            if (result)
+            {
+                fields = result->Fetch();
+                count = fields[0].GetUInt32();
+
+                delete result;
+
+                if (count > 0)
+                {
+                    // TODO: Randomize
+                    result = CharacterDatabase.Query("SELECT name WHERE in_use = 0 AND priority = 0 LIMIT 1"); // TODO: copy modified query's WHERE clause from above
+                    fields = result->Fetch();
+                    name = fields[0].GetCppString();
+
+                    delete result;
+                }
+                else
+                {
+                    // If you want to do a simple select with only 'WHERE in_use = 0' and no other where clauses, this would be it.
+                    // Not needed right now since all possibilities are accounted for (in_use = 0 and priority = 0|1)
+                    DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] Failed to find a name. Possibly all names used up, else a bug.");
+                    return false;
+                }
+            }
+            else
+            {
+                DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] [SQL] Failed to get a count of names (using priority 0)");
+                return false;
+            }
+
+            delete result;
+        }
+    }
+    else // couldn't get a count, character creation failed
+    {
+        DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] [SQL] Failed to get a count of names (using priority 1)");
+        return false;
+    }
+
+    if (name == "") // We missed a failure somewhere?
+    {
+        DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] Empty name where it shouldn't be.");
+        return false;
+    }
+
+    // extract other data required for player creating
+    //uint8 skin, face, hairStyle, hairColor, facialHair, outfitId
+    //recv_data >> skin >> face;
+    //recv_data >> hairStyle >> hairColor >> facialHair >> outfitId;
+
+    // Pretty sure this is a 'return' packet which we don't need (returning to server would be fairly pointless?)
+    // On the other hand, it's been suggested packets may be the more elegant option. TBD.
+    //WorldPacket data(SMSG_CHAR_CREATE, 1);                  // returned with diff.values in all cases
+
+    //if(GetSecurity() == SEC_PLAYER)
+    //{
+        //if(uint32 mask = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_CREATING_DISABLED))
+        //{
+            bool disabled = false;
+
+            //Team team = Player::TeamForRace(race_);
+            //switch(team)
+            //{
+            //    case ALLIANCE: disabled = mask & (1 << 0); break;
+            //    case HORDE:    disabled = mask & (1 << 1); break;
+            //}
+
+            if(disabled)
+                return false; // (uint8)CHAR_CREATE_DISABLED;
+        //}
+    //}
+
+    DEBUG_LOG("Artificial end of _CreateCharacterAutobot: Name \"%s\"; Class: %u; Race: %u; Gender: %u", name.c_str(), class_, race_, gender);
+    return false;
+
+    /*ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(class_);
+    ChrRacesEntry const* raceEntry = sChrRacesStore.LookupEntry(race_);
+
+    if( !classEntry || !raceEntry )
+    {
+        data << (uint8)CHAR_CREATE_FAILED;
+        SendPacket( &data );
+        sLog.outError("Class: %u or Race %u not found in DBC (Wrong DBC files?) or Cheater?", class_, race_);
+        return;
+    }
+
+    // prevent character creating Expansion race without Expansion account
+    if (raceEntry->expansion > Expansion())
+    {
+        data << (uint8)CHAR_CREATE_EXPANSION;
+        sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u race (%u)", Expansion(), GetAccountId(), raceEntry->expansion, race_);
+        SendPacket( &data );
+        return;
+    }
+
+    // prevent character creating Expansion class without Expansion account
+    if (classEntry->expansion > Expansion())
+    {
+        data << (uint8)CHAR_CREATE_EXPANSION_CLASS;
+        sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u class (%u)", Expansion(), GetAccountId(), classEntry->expansion, class_);
+        SendPacket( &data );
+        return;
+    }
+
+    // prevent character creating with invalid name
+    if (!normalizePlayerName(name))
+    {
+        data << (uint8)CHAR_NAME_NO_NAME;
+        SendPacket( &data );
+        sLog.outError("Account:[%d] but tried to Create character with empty [name]", GetAccountId());
+        return;
+    }
+
+    // check name limitations
+    uint8 res = ObjectMgr::CheckPlayerName(name, true);
+    if (res != CHAR_NAME_SUCCESS)
+    {
+        data << uint8(res);
+        SendPacket( &data );
+        return;
+    }
+
+    if (GetSecurity() == SEC_PLAYER && sObjectMgr.IsReservedName(name))
+    {
+        data << (uint8)CHAR_NAME_RESERVED;
+        SendPacket( &data );
+        return;
+    }
+
+    if (sObjectMgr.GetPlayerGuidByName(name))
+    {
+        data << (uint8)CHAR_CREATE_NAME_IN_USE;
+        SendPacket( &data );
+        return;
+    }
+
+    QueryResult *resultacct = LoginDatabase.PQuery("SELECT SUM(numchars) FROM realmcharacters WHERE acctid = '%u'", GetAccountId());
+    if (resultacct)
+    {
+        Field *fields=resultacct->Fetch();
+        uint32 acctcharcount = fields[0].GetUInt32();
+        delete resultacct;
+
+        if (acctcharcount >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT))
+        {
+            data << (uint8)CHAR_CREATE_ACCOUNT_LIMIT;
+            SendPacket( &data );
+            return;
+        }
+    }
+
+    QueryResult *result = CharacterDatabase.PQuery("SELECT COUNT(guid) FROM characters WHERE account = '%u'", GetAccountId());
+    uint8 charcount = 0;
+    if ( result )
+    {
+        Field *fields = result->Fetch();
+        charcount = fields[0].GetUInt8();
+        delete result;
+
+        if (charcount >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM))
+        {
+            data << (uint8)CHAR_CREATE_SERVER_LIMIT;
+            SendPacket( &data );
+            return;
+        }
+    }
+
+    // speedup check for heroic class disabled case
+    uint32 heroic_free_slots = sWorld.getConfig(CONFIG_UINT32_HEROIC_CHARACTERS_PER_REALM);
+    if(heroic_free_slots == 0 && GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
+    {
+        data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
+        SendPacket( &data );
+        return;
+    }
+
+    // speedup check for heroic class disabled case
+    uint32 req_level_for_heroic = sWorld.getConfig(CONFIG_UINT32_MIN_LEVEL_FOR_HEROIC_CHARACTER_CREATING);
+    if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT && req_level_for_heroic > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+    {
+        data << (uint8)CHAR_CREATE_LEVEL_REQUIREMENT;
+        SendPacket( &data );
+        return;
+    }
+
+    bool AllowTwoSideAccounts = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) || GetSecurity() > SEC_PLAYER;
+    CinematicsSkipMode skipCinematics = CinematicsSkipMode(sWorld.getConfig(CONFIG_UINT32_SKIP_CINEMATICS));
+
+    bool have_same_race = false;
+
+    // if 0 then allowed creating without any characters
+    bool have_req_level_for_heroic = (req_level_for_heroic==0);
+
+    if(!AllowTwoSideAccounts || skipCinematics == CINEMATICS_SKIP_SAME_RACE || class_ == CLASS_DEATH_KNIGHT)
+    {
+        QueryResult *result2 = CharacterDatabase.PQuery("SELECT level,race,class FROM characters WHERE account = '%u' %s",
+            GetAccountId(), (skipCinematics == CINEMATICS_SKIP_SAME_RACE || class_ == CLASS_DEATH_KNIGHT) ? "" : "LIMIT 1");
+        if(result2)
+        {
+            Team team_= Player::TeamForRace(race_);
+
+            Field* field = result2->Fetch();
+            uint8 acc_race  = field[1].GetUInt32();
+
+            if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
+            {
+                uint8 acc_class = field[2].GetUInt32();
+                if(acc_class == CLASS_DEATH_KNIGHT)
+                {
+                    if(heroic_free_slots > 0)
+                        --heroic_free_slots;
+
+                    if(heroic_free_slots == 0)
+                    {
+                        data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
+                        SendPacket( &data );
+                        delete result2;
+                        return;
+                    }
+                }
+
+                if(!have_req_level_for_heroic)
+                {
+                    uint32 acc_level = field[0].GetUInt32();
+                    if(acc_level >= req_level_for_heroic)
+                        have_req_level_for_heroic = true;
+                }
+            }
+
+            // need to check team only for first character
+            // TODO: what to if account already has characters of both races?
+            if (!AllowTwoSideAccounts)
+            {
+                if (acc_race == 0 || Player::TeamForRace(acc_race) != team_)
+                {
+                    data << (uint8)CHAR_CREATE_PVP_TEAMS_VIOLATION;
+                    SendPacket( &data );
+                    delete result2;
+                    return;
+                }
+            }
+
+            // search same race for cinematic or same class if need
+            // TODO: check if cinematic already shown? (already logged in?; cinematic field)
+            while ((skipCinematics == CINEMATICS_SKIP_SAME_RACE && !have_same_race) || class_ == CLASS_DEATH_KNIGHT)
+            {
+                if(!result2->NextRow())
+                    break;
+
+                field = result2->Fetch();
+                acc_race = field[1].GetUInt32();
+
+                if(!have_same_race)
+                    have_same_race = race_ == acc_race;
+
+                if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
+                {
+                    uint8 acc_class = field[2].GetUInt32();
+                    if(acc_class == CLASS_DEATH_KNIGHT)
+                    {
+                        if(heroic_free_slots > 0)
+                            --heroic_free_slots;
+
+                        if(heroic_free_slots == 0)
+                        {
+                            data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
+                            SendPacket( &data );
+                            delete result2;
+                            return;
+                        }
+                    }
+
+                    if(!have_req_level_for_heroic)
+                    {
+                        uint32 acc_level = field[0].GetUInt32();
+                        if(acc_level >= req_level_for_heroic)
+                            have_req_level_for_heroic = true;
+                    }
+                }
+            }
+            delete result2;
+        }
+    }
+
+    if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT && !have_req_level_for_heroic)
+    {
+        data << (uint8)CHAR_CREATE_LEVEL_REQUIREMENT;
+        SendPacket( &data );
+        return;
+    }
+
+    Player *pNewChar = new Player(this);
+    if (!pNewChar->Create(sObjectMgr.GeneratePlayerLowGuid(), name, race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId))
+    {
+        // Player not create (race/class problem?)
+        delete pNewChar;
+
+        data << (uint8)CHAR_CREATE_ERROR;
+        SendPacket( &data );
+
+        return;
+    }
+
+    if ((have_same_race && skipCinematics == CINEMATICS_SKIP_SAME_RACE) || skipCinematics == CINEMATICS_SKIP_ALL)
+        pNewChar->setCinematic(1);                          // not show intro
+
+    pNewChar->SetAtLoginFlag(AT_LOGIN_FIRST);               // First login
+
+    // Player created, save it now
+    pNewChar->SaveToDB();
+    charcount += 1;
+
+    LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%u' AND realmid = '%u'", GetAccountId(), realmID);
+    LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)",  charcount, GetAccountId(), realmID);
+
+    data << (uint8)CHAR_CREATE_SUCCESS;
+    SendPacket( &data );
+
+    std::string IP_str = GetRemoteAddress();
+    BASIC_LOG("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
+    sLog.outChar("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
+
+    delete pNewChar;                                        // created only to call SaveToDB()
+
+    return true;*/
 }
