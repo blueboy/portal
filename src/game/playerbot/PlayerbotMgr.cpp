@@ -1246,34 +1246,6 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
     subcommand = cmd.substr(cmd.find(' ', 1)+1);
     cmd = cmd.substr(0, cmd.find(' ', 1));
 
-    /* ** Cool code, will be needed in a version later on, but name is NOT one of the arguments for .autobot
-    char *cmd = strtok ((char *) args, " ");
-    char *charname = strtok (NULL, " ");
-
-    std::string cmdStr = cmd;
-    std::string charnameStr = charname;
-
-    if (!normalizePlayerName(charnameStr))
-        return false;
-
-    ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(charnameStr.c_str());
-    if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
-    {
-        SendSysMessage(LANG_PLAYER_NOT_FOUND);
-        SetSentErrorMessage(true);
-        return false;
-    }
-    */
-
-    // accountId will NEVER be player's accountId for AutoBot - must always be 1 (to be replaced with playerbotai.conf setting)
-    //uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
-    //if (accountId != m_session->GetAccountId())
-    //{
-    //    PSendSysMessage("|cffff0000You may only add bots from the same account.");
-    //    SetSentErrorMessage(true);
-    //    return false;
-    //}
-
     // TODO: Will this really work with the regular PlayerbotMgr?
     // create the playerbot manager if it doesn't already exist
     PlayerbotMgr* mgr = m_session->GetPlayer()->GetPlayerbotMgr();
@@ -1282,6 +1254,26 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         mgr = new PlayerbotMgr(m_session->GetPlayer());
         m_session->GetPlayer()->SetPlayerbotMgr(mgr);
     }
+
+    // TODO: name is NOT one of the arguments... but once autobot is properly in place, feel free to use this afterwards to fix admin's mistakes in editing the names SQL table?
+    if (!normalizePlayerName(subcommand))
+        return false;
+
+    // Create player here (not like you can get a player that doesn't exist)
+    // TODO: put this back inline (doesn't really improve code readability - in fact it worsens it a bit... but beneficial during development)
+    // TODO: and when you do, create PlayerbotMgr AFTER the character has been entirely created.
+    if (!m_session->GetPlayer()->GetPlayerbotMgr()->_CreateCharacterAutobot())
+        return false;
+
+    ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(subcommand.c_str());
+    if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
+    {
+        SendSysMessage(LANG_PLAYER_NOT_FOUND);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 accountId = 1;
 
     /** This method will never work, account == 1 for autobots. Always.
     QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
@@ -1306,20 +1298,21 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 
     if (0 == cmd.compare("add"))
     {
-        //if (subcommand == "")
-        //{
-        //    PSendSysMessage("|cffff0000.autobot add sub sub subcommands required");
-        //    SetSentErrorMessage(true);
-        //    return false;
-        //}
-    //    if (mgr->GetPlayerBot(guid))
-    //    {
-    //        PSendSysMessage("Bot already exists in world.");
-    //        SetSentErrorMessage(true);
-    //        return false;
-    //    }
-    //    CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
-    //    mgr->AddPlayerBot(guid);
+        if (subcommand == "")
+        {
+            PSendSysMessage("|cffff0000.autobot add sub sub subcommands required");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        if (mgr->GetPlayerBot(guid))
+        {
+            PSendSysMessage("Bot already exists in world.");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
+        mgr->AddPlayerBot(guid);
+
         PSendSysMessage("Bot added successfully.");
         return true;
     }

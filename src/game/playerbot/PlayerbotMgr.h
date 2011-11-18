@@ -45,6 +45,7 @@ public:
     void RemoveAllBotsFromGroup();
     void OnBotLogin(Player * const bot);
     void Stay();
+    bool _CreateCharacterAutobot(); // TODO: delete me (once placed inline)
 
 public:
     // config variables
@@ -64,8 +65,6 @@ public:
     uint32 m_confCollectDistanceMax;
 
 private:
-    bool _CreateCharacterAutobot();
-
     Player* const m_master;
     PlayerBotMap m_playerBots;
 };
