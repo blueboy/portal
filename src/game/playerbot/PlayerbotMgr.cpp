@@ -792,6 +792,7 @@ void PlayerbotMgr::LogoutAllBots()
         Player* bot = itr->second;
         LogoutPlayerBot(bot->GetObjectGuid());
     }
+    RemoveAllBotsFromGroup();
 }
 
 void PlayerbotMgr::Stay()
