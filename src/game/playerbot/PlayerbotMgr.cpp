@@ -1398,7 +1398,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 bool PlayerbotMgr::_CreateCharacterAutobot()
 {
     // This is the black box you now need to decipher. Good luck, me.
-    WorldPacket recv_data ();
+    //WorldPacket recv_data
 
     std::string name = "";
 
@@ -1579,8 +1579,6 @@ bool PlayerbotMgr::_CreateCharacterAutobot()
                 DEBUG_LOG("[Playerbot] [_CreateCharacterAutobot] [SQL] Failed to get a count of names (using priority 0)");
                 return false;
             }
-
-            delete result;
         }
     }
     else // couldn't get a count, character creation failed
