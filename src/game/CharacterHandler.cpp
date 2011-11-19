@@ -41,6 +41,8 @@
 
 // Playerbot mod:
 #include "playerbot/PlayerbotMgr.h"
+#include "Config/Config.h"
+extern Config botConfig;
 
 // config option SkipCinematics supported values
 enum CinematicsSkipMode

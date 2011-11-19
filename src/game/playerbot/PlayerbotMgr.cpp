@@ -10,6 +10,8 @@
 #include "../Language.h"
 #include "../WaypointMovementGenerator.h"
 
+#include "../CharacterHandler.cpp" // *sigh* just for "CINEMATICS_SKIP_ALL       = 2,"
+
 class LoginQueryHolder;
 class CharacterHandler;
 
@@ -1217,7 +1219,7 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
 
 bool ChatHandler::HandleAutoBotCommand(char* args)
 {
-    if (!(m_session->GetSecurity() > SEC_PLAYER) && botConfig.GetBoolDefault("PlayerbotAI.DisableBots", false))
+    if ((m_session->GetSecurity() <= SEC_PLAYER) && botConfig.GetBoolDefault("PlayerbotAI.DisableBots", false))
     {
         PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
         SetSentErrorMessage(true);
@@ -1485,7 +1487,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         QueryResult *result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_autobot_names");
         if (!result)
         {
-            DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a full count of names");
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a full count of names");
             return false;
         }
         Field *fields = result->Fetch();
@@ -1494,7 +1496,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 
         if (countAll == 0)
         {
-            DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] Full count of names == 0 - no names in DB?");
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Full count of names == 0 - no names in DB?");
             return false;
         }
 
@@ -1511,7 +1513,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 1");
         if (!result) // couldn't get a count, character creation failed
         {
-            DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 1)");
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 1)");
             return false;
         }
 
@@ -1529,7 +1531,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             result = CharacterDatabase.PQuery("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 1 AND name_id > %u", minId);
             if (!result) // couldn't get a count, character creation failed
             {
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 1) - minId");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 1) - minId");
                 return false;
             }
             fields = result->Fetch();
@@ -1540,7 +1542,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             result = CharacterDatabase.PQuery("SELECT name FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 1 AND name_id > %u LIMIT 1", minId);
             if (!result) // couldn't get a name, character creation failed
             {
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a name (using priority 1)");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a name (using priority 1)");
                 return false;
             }
 
@@ -1554,7 +1556,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 0");
             if (!result)
             {
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 0)");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 0)");
                 return false;
             }
 
@@ -1566,7 +1568,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             {
                 // If you want to do a simple select with only 'WHERE in_use = 0' and no other where clauses, this would be it.
                 // Not needed right now since all possibilities are accounted for (in_use = 0 and priority = 0|1)
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] Failed to find a name. Possibly all names used up, else a bug.");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] Failed to find a name. Possibly all names used up, else a bug.");
                 return false;
             }
 
@@ -1574,7 +1576,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             result = CharacterDatabase.PQuery("SELECT COUNT(*) FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 0 AND name_id > %u", minId);
             if (!result) // couldn't get a count, character creation failed
             {
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 0) - minId");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a count of names (using priority 0) - minId");
                 return false;
             }
             fields = result->Fetch();
@@ -1585,7 +1587,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             result = CharacterDatabase.PQuery("SELECT name FROM playerbot_autobot_names WHERE in_use = 0 AND priority = 0 AND name_id > %u LIMIT 1", minId);
             if (!result) // couldn't get a name, character creation failed
             {
-                DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a name (using priority 0)");
+                sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to get a name (using priority 0)");
                 return false;
             }
 
@@ -1594,49 +1596,79 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             delete result;
         }
 
+        // Double check that this name is, in fact, not in use
+        result = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE name = '%s'", name.c_str());
+        if (!result) // couldn't get a name, character creation failed
+        {
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] [SQL] Failed to lookup characters.name");
+            return false;
+        }
+        fields = result->Fetch();
+        if (fields[0].GetUInt32() != 0)
+        {
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Name already in use. Odd.");
+            delete result;
+            return false;
+        }
+        delete result;
+
         if (name == "") // We missed a failure somewhere?
         {
-            DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] Empty name where it shouldn't be.");
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Empty name where it shouldn't be.");
             return false;
         }
 
-        // name is NOT one of the arguments, but let's make sure there's no mistakes in the names SQL table
-        if (!normalizePlayerName(subcommand))
+        // let's make sure there's no mistakes in the names SQL table
+        if (!normalizePlayerName(name))
         {
-            DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] Failed to add an AutoBot, invalid name: %s", name.c_str());
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Failed to add an AutoBot, invalid name: %s", name.c_str());
             return false;
         }
 
+        // check name limitations
+        uint8 res = ObjectMgr::CheckPlayerName(name, true);
+        if (res != CHAR_NAME_SUCCESS)
+        {
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Tried to create character with invalid name: \"%s\"", name.c_str());
+            return false;
+        }
 
-        // This is the black box you now need to decipher. Good luck, me.
-        //WorldPacket recv_data
+        if (m_session->GetSecurity() <= SEC_PLAYER && sObjectMgr.IsReservedName(name))
+        {
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Tried to create character with reserved name: \"%s\"", name.c_str());
+            return false;
+        }
 
-        // extract other data required for player creating
-        //uint8 skin, face, hairStyle, hairColor, facialHair, outfitId
-        //recv_data >> skin >> face;
-        //recv_data >> hairStyle >> hairColor >> facialHair >> outfitId;
+        if(m_session->GetSecurity() <= SEC_PLAYER)
+        {
+            // BELOW IS ONLY PSEUDO-CODE!!!
+            //if (!m_botConfig->getConfig("AutoBots.Enabled", false))
+            //    return false;
+        }
 
-        // Pretty sure this is a 'return' packet which we don't need (returning to server would be fairly pointless?)
-        // On the other hand, it's been suggested packets may be the more elegant option. TBD.
-        //WorldPacket data(SMSG_CHAR_CREATE, 1);                  // returned with diff.values in all cases
+        // TODO TODO TODO Very important TODO: INSERT some sort of 'maximum autobots for this account/server' checks
 
-        //if(GetSecurity() == SEC_PLAYER)
-        //{
-            //if(uint32 mask = sWorld.getConfig(CONFIG_UINT32_CHARACTERS_CREATING_DISABLED))
-            //{
-                bool disabled = false;
+        // TODO: Hurr... How about filling this with verified (and random if applicable) data?
+        uint8 skin = 0;
+        uint8 face = 0;
+        uint8 hairStyle = 0;
+        uint8 hairColor = 0;
+        uint8 facialHair = 0;
+        uint8 outfitId = 0;
 
-                //Team team = Player::TeamForRace(race_);
-                //switch(team)
-                //{
-                //    case ALLIANCE: disabled = mask & (1 << 0); break;
-                //    case HORDE:    disabled = mask & (1 << 1); break;
-                //}
+        Player *pNewChar = new Player(m_session);
+        if (!pNewChar->Create(sObjectMgr.GeneratePlayerLowGuid(), name, race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId))
+        {
+            // Player not create (race/class problem?)
+            delete pNewChar;
 
-                if(disabled)
-                    return false; // (uint8)CHAR_CREATE_DISABLED;
-            //}
-        //}
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Unable to create player - Name: \"%s\"; race: %u; class: %u; gender: %u; skin: %u; face: %u; hairStyle: %u; hairColor: %u; facialHair: %u; outfitId: %u", name.c_str(), race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId);
+            return false;
+        }
+
+        //pNewChar->setCinematic(1); // not show intro
+        pNewChar->setCinematic(CINEMATICS_SKIP_ALL);
+        pNewChar->SetAtLoginFlag(AT_LOGIN_NONE); // First login
 
         std::string DELME_class_ = "";
         switch (class_)
@@ -1674,239 +1706,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         DEBUG_LOG("Artificial end of HandleAutoBotCommand: Name \"%s\"; Class: %u; Race: %u; Gender: %u", name.c_str(), class_, race_, gender);
         return false;
 
-        /*ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(class_);
-        ChrRacesEntry const* raceEntry = sChrRacesStore.LookupEntry(race_);
-
-        if( !classEntry || !raceEntry )
-        {
-            data << (uint8)CHAR_CREATE_FAILED;
-            SendPacket( &data );
-            sLog.outError("Class: %u or Race %u not found in DBC (Wrong DBC files?) or Cheater?", class_, race_);
-            return;
-        }
-
-        // prevent character creating Expansion race without Expansion account
-        if (raceEntry->expansion > Expansion())
-        {
-            data << (uint8)CHAR_CREATE_EXPANSION;
-            sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u race (%u)", Expansion(), GetAccountId(), raceEntry->expansion, race_);
-            SendPacket( &data );
-            return;
-        }
-
-        // prevent character creating Expansion class without Expansion account
-        if (classEntry->expansion > Expansion())
-        {
-            data << (uint8)CHAR_CREATE_EXPANSION_CLASS;
-            sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u class (%u)", Expansion(), GetAccountId(), classEntry->expansion, class_);
-            SendPacket( &data );
-            return;
-        }
-
-        // prevent character creating with invalid name
-        if (!normalizePlayerName(name))
-        {
-            data << (uint8)CHAR_NAME_NO_NAME;
-            SendPacket( &data );
-            sLog.outError("Account:[%d] but tried to Create character with empty [name]", GetAccountId());
-            return;
-        }
-
-        // check name limitations
-        uint8 res = ObjectMgr::CheckPlayerName(name, true);
-        if (res != CHAR_NAME_SUCCESS)
-        {
-            data << uint8(res);
-            SendPacket( &data );
-            return;
-        }
-
-        if (GetSecurity() == SEC_PLAYER && sObjectMgr.IsReservedName(name))
-        {
-            data << (uint8)CHAR_NAME_RESERVED;
-            SendPacket( &data );
-            return;
-        }
-
-        if (sObjectMgr.GetPlayerGuidByName(name))
-        {
-            data << (uint8)CHAR_CREATE_NAME_IN_USE;
-            SendPacket( &data );
-            return;
-        }
-
-        QueryResult *resultacct = LoginDatabase.PQuery("SELECT SUM(numchars) FROM realmcharacters WHERE acctid = '%u'", GetAccountId());
-        if (resultacct)
-        {
-            Field *fields=resultacct->Fetch();
-            uint32 acctcharcount = fields[0].GetUInt32();
-            delete resultacct;
-
-            if (acctcharcount >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_ACCOUNT))
-            {
-                data << (uint8)CHAR_CREATE_ACCOUNT_LIMIT;
-                SendPacket( &data );
-                return;
-            }
-        }
-
-        QueryResult *result = CharacterDatabase.PQuery("SELECT COUNT(guid) FROM characters WHERE account = '%u'", GetAccountId());
-        uint8 charcount = 0;
-        if ( result )
-        {
-            Field *fields = result->Fetch();
-            charcount = fields[0].GetUInt8();
-            delete result;
-
-            if (charcount >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM))
-            {
-                data << (uint8)CHAR_CREATE_SERVER_LIMIT;
-                SendPacket( &data );
-                return;
-            }
-        }
-
-        // speedup check for heroic class disabled case
-        uint32 heroic_free_slots = sWorld.getConfig(CONFIG_UINT32_HEROIC_CHARACTERS_PER_REALM);
-        if(heroic_free_slots == 0 && GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
-        {
-            data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
-            SendPacket( &data );
-            return;
-        }
-
-        // speedup check for heroic class disabled case
-        uint32 req_level_for_heroic = sWorld.getConfig(CONFIG_UINT32_MIN_LEVEL_FOR_HEROIC_CHARACTER_CREATING);
-        if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT && req_level_for_heroic > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
-        {
-            data << (uint8)CHAR_CREATE_LEVEL_REQUIREMENT;
-            SendPacket( &data );
-            return;
-        }
-
-        bool AllowTwoSideAccounts = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_ACCOUNTS) || GetSecurity() > SEC_PLAYER;
-        CinematicsSkipMode skipCinematics = CinematicsSkipMode(sWorld.getConfig(CONFIG_UINT32_SKIP_CINEMATICS));
-
-        bool have_same_race = false;
-
-        // if 0 then allowed creating without any characters
-        bool have_req_level_for_heroic = (req_level_for_heroic==0);
-
-        if(!AllowTwoSideAccounts || skipCinematics == CINEMATICS_SKIP_SAME_RACE || class_ == CLASS_DEATH_KNIGHT)
-        {
-            QueryResult *result2 = CharacterDatabase.PQuery("SELECT level,race,class FROM characters WHERE account = '%u' %s",
-                GetAccountId(), (skipCinematics == CINEMATICS_SKIP_SAME_RACE || class_ == CLASS_DEATH_KNIGHT) ? "" : "LIMIT 1");
-            if(result2)
-            {
-                Team team_= Player::TeamForRace(race_);
-
-                Field* field = result2->Fetch();
-                uint8 acc_race  = field[1].GetUInt32();
-
-                if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
-                {
-                    uint8 acc_class = field[2].GetUInt32();
-                    if(acc_class == CLASS_DEATH_KNIGHT)
-                    {
-                        if(heroic_free_slots > 0)
-                            --heroic_free_slots;
-
-                        if(heroic_free_slots == 0)
-                        {
-                            data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
-                            SendPacket( &data );
-                            delete result2;
-                            return;
-                        }
-                    }
-
-                    if(!have_req_level_for_heroic)
-                    {
-                        uint32 acc_level = field[0].GetUInt32();
-                        if(acc_level >= req_level_for_heroic)
-                            have_req_level_for_heroic = true;
-                    }
-                }
-
-                // need to check team only for first character
-                // TODO: what to if account already has characters of both races?
-                if (!AllowTwoSideAccounts)
-                {
-                    if (acc_race == 0 || Player::TeamForRace(acc_race) != team_)
-                    {
-                        data << (uint8)CHAR_CREATE_PVP_TEAMS_VIOLATION;
-                        SendPacket( &data );
-                        delete result2;
-                        return;
-                    }
-                }
-
-                // search same race for cinematic or same class if need
-                // TODO: check if cinematic already shown? (already logged in?; cinematic field)
-                while ((skipCinematics == CINEMATICS_SKIP_SAME_RACE && !have_same_race) || class_ == CLASS_DEATH_KNIGHT)
-                {
-                    if(!result2->NextRow())
-                        break;
-
-                    field = result2->Fetch();
-                    acc_race = field[1].GetUInt32();
-
-                    if(!have_same_race)
-                        have_same_race = race_ == acc_race;
-
-                    if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT)
-                    {
-                        uint8 acc_class = field[2].GetUInt32();
-                        if(acc_class == CLASS_DEATH_KNIGHT)
-                        {
-                            if(heroic_free_slots > 0)
-                                --heroic_free_slots;
-
-                            if(heroic_free_slots == 0)
-                            {
-                                data << (uint8)CHAR_CREATE_UNIQUE_CLASS_LIMIT;
-                                SendPacket( &data );
-                                delete result2;
-                                return;
-                            }
-                        }
-
-                        if(!have_req_level_for_heroic)
-                        {
-                            uint32 acc_level = field[0].GetUInt32();
-                            if(acc_level >= req_level_for_heroic)
-                                have_req_level_for_heroic = true;
-                        }
-                    }
-                }
-                delete result2;
-            }
-        }
-
-        if(GetSecurity() == SEC_PLAYER && class_ == CLASS_DEATH_KNIGHT && !have_req_level_for_heroic)
-        {
-            data << (uint8)CHAR_CREATE_LEVEL_REQUIREMENT;
-            SendPacket( &data );
-            return;
-        }
-
-        Player *pNewChar = new Player(this);
-        if (!pNewChar->Create(sObjectMgr.GeneratePlayerLowGuid(), name, race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId))
-        {
-            // Player not create (race/class problem?)
-            delete pNewChar;
-
-            data << (uint8)CHAR_CREATE_ERROR;
-            SendPacket( &data );
-
-            return;
-        }
-
-        if ((have_same_race && skipCinematics == CINEMATICS_SKIP_SAME_RACE) || skipCinematics == CINEMATICS_SKIP_ALL)
-            pNewChar->setCinematic(1);                          // not show intro
-
-        pNewChar->SetAtLoginFlag(AT_LOGIN_FIRST);               // First login
-
+        /*
         // Player created, save it now
         pNewChar->SaveToDB();
         charcount += 1;
@@ -1914,14 +1714,11 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%u' AND realmid = '%u'", GetAccountId(), realmID);
         LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)",  charcount, GetAccountId(), realmID);
 
-        data << (uint8)CHAR_CREATE_SUCCESS;
-        SendPacket( &data );
+        std::string IP_str = m_session->GetRemoteAddress();
+        BASIC_LOG("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", m_session->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
+        sLog.outChar("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", m_session->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
 
-        std::string IP_str = GetRemoteAddress();
-        BASIC_LOG("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
-        sLog.outChar("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
-
-        delete pNewChar;                                        // created only to call SaveToDB()
+        delete pNewChar; // created only to call SaveToDB()
 
         return true;*/
 
@@ -1936,20 +1733,19 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         uint32 accountId = 1;
 
         /** This method will never work, account == 1 for autobots. Always.
-        QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
+        QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", accountId);
         if (resultchar)
         {
             Field *fields = resultchar->Fetch();
             int acctcharcount = fields[0].GetUInt32();
             int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
-            if (!(m_session->GetSecurity() > SEC_PLAYER))
-                if (acctcharcount > maxnum && (cmdStr == "add" || cmdStr == "login"))
-                {
-                    PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
-                    SetSentErrorMessage(true);
-                    delete resultchar;
-                    return false;
-                }
+            if (!(m_session->GetSecurity() > SEC_PLAYER) && acctcharcount > maxnum)
+            {
+                PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
+                SetSentErrorMessage(true);
+                delete resultchar;
+                return false;
+            }
             delete resultchar;
         }
         */
