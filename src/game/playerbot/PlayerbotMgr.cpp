@@ -29,7 +29,25 @@ void PlayerbotMgr::SetInitialWorldSettings()
     if (botConfig.GetIntDefault("ConfVersion", 0) != PLAYERBOT_CONF_VERSION)
         sLog.outError("Playerbot: Configuration file version doesn't match expected version. Some config variables may be wrong or missing.");
 
-    if (botConfig.GetBoolDefault("PlayerbotAI.AutobotNamesInUseReset", false))
+    // Remove all Autobots that didn't get deleted, at startup. BEFORE (possibly) resetting NamesInUse
+    // Very similar to Player::DeleteOldCharacters()
+    uint32 accountId = botConfig.GetIntDefault("PlayerbotAI.Autobot.AccountId", 4);
+    sLog.outString("Playerbot: Deleting all Autobots. AccountId: %u", accountId);
+
+    QueryResult *resultChars = CharacterDatabase.PQuery("SELECT guid FROM characters WHERE account = %u", accountId);
+    if (resultChars)
+    {
+        sLog.outString("Playerbot: Found %u autobot(s) to delete", uint32(resultChars->GetRowCount()));
+        do
+        {
+            Field *charFields = resultChars->Fetch();
+            ObjectGuid guid = ObjectGuid(HIGHGUID_PLAYER, charFields[0].GetUInt32());
+            Player::DeleteFromDB(guid, accountId, true, true);
+        } while(resultChars->NextRow());
+        delete resultChars;
+    }
+
+    if (botConfig.GetBoolDefault("PlayerbotAI.Autobot.NamesInUseReset", false))
         PlayerbotMgr::AutobotNamesInUseReset();
 }
 
@@ -1226,7 +1244,14 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         return false;
     }
 
-    //// Well, for now anyway
+    if (m_session->GetSecurity() <= SEC_PLAYER && !botConfig.GetBoolDefault("PlayerbotAI.Autobot.Enabled", false))
+    {
+        PSendSysMessage("|cffff0000Autobot system is currently disabled!");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // As far as adding from a command is concerned, anyway
     if (!m_session)
     {
         PSendSysMessage("|cffff0000You may only add bots from an active session");
@@ -1236,12 +1261,12 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
 
     if (!*args)
     {
-        //PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
-        PSendSysMessage("|cffff0000Invalid arguments for .autobot command.");
+        PSendSysMessage("|cffff0000Autobot usage: .autobot <add | remove>");
         SetSentErrorMessage(true);
         return false;
     }
 
+    uint32 accountId = botConfig.GetIntDefault("PlayerbotAI.Autobot.AccountId", 4);
     std::string cmd = args;
     std::string subcommand = "";
     if (cmd.find(' '))
@@ -1257,14 +1282,12 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         m_session->GetPlayer()->SetPlayerbotMgr(mgr);
     }
 
-    // TODO: Work out .autobot command structure and implement below (and above)
-
-    if (0 == cmd.compare("add"))
+    if ("add" == cmd)
     {
         // subcommand cannot be empty, must have a space 'purpose role', space must not be first or last character
         if (subcommand == "" || subcommand.find(' ', 1) > (subcommand.size()-1))
         {
-            PSendSysMessage("|cffff0000.autobot add <worldpve|instance|worldpvp|battleground> <tank|dps|heal>");
+            PSendSysMessage("|cffff0000.autobot add <worldpve | instance | worldpvp | battleground> <tank | dps | heal>");
             SetSentErrorMessage(true);
             return false;
         }
@@ -1283,7 +1306,39 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             return false;
         }
 
-        // Create player here (not like you can add a player that doesn't exist)
+        // Okay, the command has been validated. Let's make the effort of finding out whether any more bots can be added.
+        QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", accountId);
+        if (resultchar)
+        {
+            Field *fields = resultchar->Fetch();
+            int autobotCountServer = fields[0].GetUInt32();
+            int autobotMaxServer = botConfig.GetIntDefault("PlayerbotAI.Autobot.MaxBots.Server", 100);
+            if (autobotCountServer > autobotMaxServer)
+            {
+                PSendSysMessage("|cffff0000You cannot summon anymore bots. (Current Max: |cffffffff%u|cffff0000)", autobotMaxServer);
+                SetSentErrorMessage(true);
+                delete resultchar;
+                return false;
+            }
+            delete resultchar;
+        }
+
+        // Get raceMask (race(s), faction, all_playable), may be important (e.g. for instancing you want same faction)
+        // NOTE: This is further narrowed down by class, may cause it to fail (no Tauren and NElves = no druids)
+        uint32 raceMask = m_session->GetPlayer()->getRaceMask();
+        if (RACEMASK_ALLIANCE & raceMask)
+            raceMask = RACEMASK_ALLIANCE;
+        else if (RACEMASK_HORDE & raceMask)
+            raceMask = RACEMASK_HORDE;
+        else
+        {
+            PSendSysMessage("|cffff0000Cannot create an autobot that is not Alliance or Horde.");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        bool bAnyFaction = false;
+
+        // Create character here (not like you can add a character that doesn't exist)
         std::string name = "";
 
         // Select a random gender. GENDER_NONE is not an option for players.
@@ -1318,16 +1373,19 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             validChoices.push_back( CLASS_SHAMAN );
             validChoices.push_back( CLASS_DRUID );
         }
+
+        if (validChoices.size() == 0)
+        {
+            PSendSysMessage("|cffff0000Cannot create an autobot - no valid class.");
+            SetSentErrorMessage(true);
+            return false;
+        }
         // Select a random class.
         uint8 class_ = validChoices.at( (rand() % validChoices.size()) );
 
         validChoices.clear();
 
-        // Get faction, may be important (e.g. for instancing you want same faction)
-        uint32 raceMask = m_session->GetPlayer()->getRaceMask();
-        bool bAnyFaction = false;
-
-        if (RACEMASK_ALLIANCE & raceMask || (bAnyFaction && (RACEMASK_ALL_PLAYABLE & raceMask)))
+        if (RACEMASK_ALLIANCE == raceMask || RACEMASK_ALL_PLAYABLE == raceMask)
         {
             switch (class_)
             {
@@ -1391,7 +1449,7 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             }
         }
 
-        if (RACEMASK_HORDE & raceMask || (bAnyFaction && (RACEMASK_ALL_PLAYABLE & raceMask)))
+        if (RACEMASK_HORDE == raceMask || RACEMASK_ALL_PLAYABLE == raceMask)
         {
             switch (class_)
             {
@@ -1455,6 +1513,12 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             }
         }
 
+        if (validChoices.size() == 0)
+        {
+            PSendSysMessage("|cffff0000Cannot create an autobot - no valid race/class combination.");
+            SetSentErrorMessage(true);
+            return false;
+        }
         // Select a random race.
         uint8 race_ = validChoices.at( (rand() % validChoices.size()) );
 
@@ -1633,20 +1697,13 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
             return false;
         }
 
-        if (m_session->GetSecurity() <= SEC_PLAYER && sObjectMgr.IsReservedName(name))
+        if (sObjectMgr.IsReservedName(name))
         {
             sLog.outError("[Playerbot] [HandleAutoBotCommand] Tried to create character with reserved name: \"%s\"", name.c_str());
             return false;
         }
 
-        if(m_session->GetSecurity() <= SEC_PLAYER)
-        {
-            // BELOW IS ONLY PSEUDO-CODE!!!
-            //if (!m_botConfig->getConfig("AutoBots.Enabled", false))
-            //    return false;
-        }
-
-        // TODO TODO TODO Very important TODO: INSERT some sort of 'maximum autobots for this account/server' checks
+        // TODO TODO Important TODO: INSERT some sort of 'maximum autobots for this account' check
 
         // TODO: Hurr... How about filling this with verified (and random if applicable) data?
         uint8 skin = 0;
@@ -1654,21 +1711,86 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         uint8 hairStyle = 0;
         uint8 hairColor = 0;
         uint8 facialHair = 0;
-        uint8 outfitId = 0;
+        uint8 outfitId = 0; // off the hook for this one; not actually used in Player::Create()
 
-        Player *pNewChar = new Player(m_session);
+        /**
+        * Well, now we need a session. If we give along the wrong session (such as the person who called '.autobot add ...') we'll end up with the wrong accountId
+        * There are of course other ways but this is the least intrusive one (no modifying Player, CharacterHandler, ... code).
+        * Functions of interest:
+        *CharacterHandler::HandlePlayerbotCallback
+        *PlayerbotMgr::AddPlayerBot
+        */
+// We're not using this bit: we don't have a guid until we create a player, we won't have a player until we have a session, so we *need* a session without a guid.
+//LoginQueryHolder *holder = new LoginQueryHolder(accountId, playerGuid);
+//if(!holder->Initialize())
+//{
+//    delete holder;                                      // delete all unprocessed queries
+//    return;
+//}
+//if (!holder)
+//    return;
+
+        /**
+        * The bot needs a session
+        * WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
+        *     m_muteTime(mute_time), _player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0),
+        *     m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
+        *     m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetIndexForLocale(locale)),
+        *     m_latency(0), m_tutorialState(TUTORIALDATA_UNCHANGED)
+        */
+        //WorldSession autobotSession = WorldSession (id, this, AccountTypes(security), expansion, mutetime, locale);
+        WorldSession* autobotSession = new WorldSession (accountId, NULL, SEC_PLAYER, MAX_EXPANSION, 0, LOCALE_enUS);
+        if (!autobotSession)
+        {
+            sLog.outError("[Playerbot] [HandleAutoBotCommand] Couldn't create session.");
+            return false;
+        }
+
+        Player *pNewChar = new Player(autobotSession);
         if (!pNewChar->Create(sObjectMgr.GeneratePlayerLowGuid(), name, race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId))
         {
-            // Player not create (race/class problem?)
+            // Player not created (race/class problem?)
             delete pNewChar;
 
             sLog.outError("[Playerbot] [HandleAutoBotCommand] Unable to create player - Name: \"%s\"; race: %u; class: %u; gender: %u; skin: %u; face: %u; hairStyle: %u; hairColor: %u; facialHair: %u; outfitId: %u", name.c_str(), race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId);
             return false;
         }
+        DEBUG_LOG("[Playerbot] [HandleAutoBotCommand] Created player - Name: \"%s\"; race: %u; class: %u; gender: %u; skin: %u; face: %u; hairStyle: %u; hairColor: %u; facialHair: %u; outfitId: %u", name.c_str(), race_, class_, gender, skin, face, hairStyle, hairColor, facialHair, outfitId);
 
         //pNewChar->setCinematic(1); // not show intro
         pNewChar->setCinematic(CINEMATICS_SKIP_ALL);
         pNewChar->SetAtLoginFlag(AT_LOGIN_NONE); // First login
+
+        // Player created, save it now
+        pNewChar->SaveToDB();
+        //charcount += 1;
+
+        // This appears to be a log of every character logged in.
+        // Obviously we don't want to delete other chars from this account, but are we allowed to not add them?
+        //LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%u' AND realmid = '%u'", accountId, realmID);
+        //LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)",  charcount, accountId, realmID);
+
+        std::string IP_str = m_session->GetRemoteAddress();
+        BASIC_LOG("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", autobotSession->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
+        sLog.outChar("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", autobotSession->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
+
+        ObjectGuid guid = pNewChar->GetObjectGuid();
+
+        delete pNewChar; // created only to call SaveToDB()
+
+        /**
+        * Okay, *phew*, at this point the Character has been created. But the job's not done, now we have to log it in!
+        */
+
+        // Should never exist - we just created this player - but better safe than sorry
+        if (mgr->GetPlayerBot(guid))
+        {
+            PSendSysMessage("Bot already exists in world.");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
+        mgr->AddPlayerBot(guid);
 
         std::string DELME_class_ = "";
         switch (class_)
@@ -1700,137 +1822,37 @@ bool ChatHandler::HandleAutoBotCommand(char* args)
         case RACE_BLOODELF: DELME_race_ = "RACE_BLOODELF"; break;
         default: DELME_race_ = "Broken";
         }
-        PSendSysMessage("Artificial end of HandleAutoBotCommand: Name \"%s\"; Class: %s; Race: %s; Gender: %u", name.c_str(), DELME_class_.c_str(), DELME_race_.c_str(), gender);
-        SetSentErrorMessage(true);
+        PSendSysMessage("HandleAutoBotCommand: Name \"%s\"; Class: %s; Race: %s; Gender: %u", name.c_str(), DELME_class_.c_str(), DELME_race_.c_str(), gender);
+        //SetSentErrorMessage(true);
 
-        DEBUG_LOG("Artificial end of HandleAutoBotCommand: Name \"%s\"; Class: %u; Race: %u; Gender: %u", name.c_str(), class_, race_, gender);
-        return false;
-
-        /*
-        // Player created, save it now
-        pNewChar->SaveToDB();
-        charcount += 1;
-
-        LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%u' AND realmid = '%u'", GetAccountId(), realmID);
-        LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)",  charcount, GetAccountId(), realmID);
-
-        std::string IP_str = m_session->GetRemoteAddress();
-        BASIC_LOG("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", m_session->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
-        sLog.outChar("[AutoBot] Account: %d (IP: %s) Create Character:[%s] (guid: %u)", m_session->GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
-
-        delete pNewChar; // created only to call SaveToDB()
-
-        return true;*/
-
-        ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(subcommand.c_str());
-        if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
-        {
-            SendSysMessage(LANG_PLAYER_NOT_FOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        uint32 accountId = 1;
-
-        /** This method will never work, account == 1 for autobots. Always.
-        QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", accountId);
-        if (resultchar)
-        {
-            Field *fields = resultchar->Fetch();
-            int acctcharcount = fields[0].GetUInt32();
-            int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
-            if (!(m_session->GetSecurity() > SEC_PLAYER) && acctcharcount > maxnum)
-            {
-                PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
-                SetSentErrorMessage(true);
-                delete resultchar;
-                return false;
-            }
-            delete resultchar;
-        }
-        */
-
-        //if (mgr->GetPlayerBot(guid))
-        //{
-        //    PSendSysMessage("Bot already exists in world.");
-        //    SetSentErrorMessage(true);
-        //    return false;
-        //}
-        //CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
-        //mgr->AddPlayerBot(guid);
+        //DEBUG_LOG("HandleAutoBotCommand: Name \"%s\"; Class: %u; Race: %u; Gender: %u", name.c_str(), class_, race_, gender);
+        //return false;
 
         PSendSysMessage("Bot added successfully.");
         return true;
     }
 
-    // TODO: fix this function. For now, don't open a gaping security hole
-    PSendSysMessage("|cffff0000.autobot command not functional yet.");
+    else if ("remove" == cmd)
+    {
+        //if (valid rights to this autobot, etc etc) {}
+        //if (!mgr->GetPlayerBot(guid))
+        //{
+        //    PSendSysMessage("|cffff0000Bot can not be removed because bot does not exist in world.");
+        //    SetSentErrorMessage(true);
+        //    return false;
+        //}
+        //CharacterDatabase.DirectPExecute("UPDATE characters SET online = 0 WHERE guid = '%u'", guid.GetCounter());
+        //mgr->LogoutPlayerBot(guid);
+        //
+        //// DELETE character. Permanently.
+        //sLog.outString("Playerbot: Done with autobot, deleting.");
+        //Player::DeleteFromDB(guid, accountId, true, true);
+        //
+        //PSendSysMessage("Bot removed successfully.");
+        return true;
+    }
+
+    PSendSysMessage("|cffff0000Autobot usage: .autobot <add | remove>");
     SetSentErrorMessage(true);
-    return false;
-
-    // remove. also likely.
-    //else if (cmdStr == "remove" || cmdStr == "logout")
-    //{
-    //    if (!mgr->GetPlayerBot(guid))
-    //    {
-    //        PSendSysMessage("|cffff0000Bot can not be removed because bot does not exist in world.");
-    //        SetSentErrorMessage(true);
-    //        return false;
-    //    }
-    //    CharacterDatabase.DirectPExecute("UPDATE characters SET online = 0 WHERE guid = '%u'", guid.GetCounter());
-    //    mgr->LogoutPlayerBot(guid);
-    //    PSendSysMessage("Bot removed successfully.");
-    //}
-
-    // combatorder. tank, yes. Heal, yes.
-    // Assist, yes (DPS) - WITHOUT TARGET. Automatically select tank, if multiple, tank with least assists.
-    // Protect, no - AUTOMATICALLY protect healer. If multiple, protect healer with least protects.
-    // Reset, hell no. You want a reset, you slave away working on your AltBot.
-    //else if (cmdStr == "co" || cmdStr == "combatorder")
-    //{
-    //    Unit *target = NULL;
-    //    char *orderChar = strtok(NULL, " ");
-    //    if (!orderChar)
-    //    {
-    //        PSendSysMessage("|cffff0000Syntax error:|cffffffff .bot co <botName> <order=reset|tank|assist|heal|protect> [targetPlayer]");
-    //        SetSentErrorMessage(true);
-    //        return false;
-    //    }
-    //    std::string orderStr = orderChar;
-    //    if (orderStr == "protect" || orderStr == "assist")
-    //    {
-    //        char *targetChar = strtok(NULL, " ");
-    //        ObjectGuid targetGUID = m_session->GetPlayer()->GetSelectionGuid();
-    //        if (!targetChar && !targetGUID)
-    //        {
-    //            PSendSysMessage("|cffff0000Combat orders protect and assist expect a target either by selection or by giving target player in command string!");
-    //            SetSentErrorMessage(true);
-    //            return false;
-    //        }
-    //        if (targetChar)
-    //        {
-    //            std::string targetStr = targetChar;
-    //            ObjectGuid targ_guid = sObjectMgr.GetPlayerGuidByName(targetStr.c_str());
-
-    //            targetGUID.Set(targ_guid.GetRawValue());
-    //        }
-    //        target = ObjectAccessor::GetUnit(*m_session->GetPlayer(), targetGUID);
-    //        if (!target)
-    //        {
-    //            PSendSysMessage("|cffff0000Invalid target for combat order protect or assist!");
-    //            SetSentErrorMessage(true);
-    //            return false;
-    //        }
-    //    }
-    //    if (mgr->GetPlayerBot(guid) == NULL)
-    //    {
-    //        PSendSysMessage("|cffff0000Bot can not receive combat order because bot does not exist in world.");
-    //        SetSentErrorMessage(true);
-    //        return false;
-    //    }
-    //    mgr->GetPlayerBot(guid)->GetPlayerbotAI()->SetCombatOrderByStr(orderStr, target);
-    //}
-
-    //return true;
     return false;
 }

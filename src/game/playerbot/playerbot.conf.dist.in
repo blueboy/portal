@@ -3,7 +3,7 @@
 #####################################
 
 [PlayerbotConf]
-ConfVersion=2011110501
+ConfVersion=2011112001
 
 ###################################################################################################################
 # PLAYERBOTAI CONFIGURATION
@@ -67,7 +67,19 @@ ConfVersion=2011110501
 #        Default: 0 - off
 #                 1 - on
 #
-#    PlayerbotAI.AutobotNamesInUseReset
+#    PlayerbotAI.Autobot.MaxBots.Server
+#        Maximum server-wide amount of Autobots. Does not count Altbots.
+#        There is currently no maximum hard-limited in the code, only by your hardware.
+#        Default: 100
+#                 0 - Autobots are effectively disabled
+#
+#    PlayerbotAI.Autobot.AccountId
+#        Account Id to use for Autobot characters. Be *very* careful with this. Safe values are considered 1-4
+#        on default databases (where 1 is account Administrator, 2 is Moderator, 3 is GameMaster and 4 is Player).
+#        Values other than the default '4' may work but are not supported.
+#        Default: 4 - 'PLAYER'
+#
+#    PlayerbotAI.Autobot.NamesInUseReset
 #        Do a check at server startup to ensure that 'names in use' setting in DB is correct. Should take a while,
 #        recommend you just leave this off. You can do this manually as well with a command, but it's a relatively
 #        big drain for a live server. This should never be required, but right is right so here's the option.
@@ -93,4 +105,7 @@ PlayerbotAI.Collect.Objects = 1
 PlayerbotAI.Collect.DistanceMax = 50
 PlayerbotAI.Collect.Distance = 25
 PlayerbotAI.SellGarbage = 0
-PlayerbotAI.AutobotNamesInUseReset = 0
+
+PlayerbotAI.Autobot.MaxBots.Server = 100
+PlayerbotAI.Autobot.AccountId = 4
+PlayerbotAI.Autobot.NamesInUseReset = 0
