@@ -54,7 +54,10 @@ enum ProfessionSpells
     JEWELCRAFTING_1                = 25229,
     MINING_1                       = 2575,
     SKINNING_1                     = 8613,
-    TAILORING_1                    = 3908
+    TAILORING_1                    = 3908,
+    MILLING_1                      = 51005,
+    DISENCHANTING_1                = 13262,
+    PROSPECTING_1                  = 31252
 };
 
 enum TalentsDeathKnight  // 0x020
@@ -1345,9 +1348,9 @@ enum Glyphs
 };
 
 /**
-* So they're kept track of somewhere... but let's comment them out.
-enum GlyphsUnknown
-{
+ * So they're kept track of somewhere... but let's comment them out.
+   enum GlyphsUnknown
+   {
     UNKNOWN_MAJOR_GLYPH_OF_NATURAL_FORCE             = 2,     // Unknown   Spell ID: 52084
     UNKNOWN_UNKNOWN_GLYPH_CRUELTY                    = 21,    // Unknown   Spell ID: 12320
     UNKNOWN_UNKNOWN_GLYPH_ANTICIPATION               = 22,    // Unknown   Spell ID: 12297
@@ -1371,7 +1374,7 @@ enum GlyphsUnknown
     UNKNOWN_MINOR_GLYPH_OF_CURSE_OF_EXHAUSION        = 480,   // Unknown   Spell ID: 58080
     UNKNOWN_MINOR_GLYPH_OF_BLAST_WAVE                = 611,   // Unknown   Spell ID: 62126
     UNKNOWN_MAJOR_GLYPH_OF_ENVENOM                   = 791,   // Unknown   Spell ID: 64199
-};*/
+   };*/
 
 // TODO: replace this with mangos data... I mean this has GOT to be out there somewhere already
 //       and when you do, don't forget to change everywhere (including the sql file)
@@ -1400,6 +1403,40 @@ enum TalentSpecPurpose
     TSP_PVP_HEALING                 = 0x00100000,
     TSP_PVP_ARENA                   = 0x00200000,
     TSP_PVP_ALL                     = 0xFFFF0000   // Highly recommend AGAINST using this
+};
+
+enum MainSpec
+{
+    MAGE_SPEC_FIRE              = 41,
+    MAGE_SPEC_FROST             = 61,
+    MAGE_SPEC_ARCANE            = 81,
+    WARRIOR_SPEC_ARMS           = 161,
+    WARRIOR_APEC_PROTECTION     = 163,
+    WARRIOR_SPEC_FURY           = 164,
+    ROGUE_SPEC_COMBAT           = 181,
+    ROGUE_SPEC_ASSASSINATION    = 182,
+    ROGUE_SPEC_SUBTELTY         = 183,
+    PRIEST_SPEC_DISCIPLINE      = 201,
+    PRIEST_SPEC_HOLY            = 202,
+    PRIEST_SPEC_SHADOW          = 203,
+    SHAMAN_SPEC_ELEMENTAL       = 261,
+    SHAMAN_SPEC_RESTORATION     = 262,
+    SHAMAN_SPEC_ENHANCEMENT     = 263,
+    DRUID_SPEC_FERAL            = 281,
+    DRUID_SPEC_RESTORATION      = 282,
+    DRUID_SPEC_BALANCE          = 283,
+    WARLOCK_SPEC_DESTRUCTION    = 301,
+    WARLOCK_SPEC_AFFLICTION     = 302,
+    WARLOCK_SPEC_DEMONOLOGY     = 303,
+    HUNTER_SPEC_BEASTMASTERY    = 361,
+    HUNTER_SPEC_SURVIVAL        = 362,
+    HUNTER_SPEC_MARKSMANSHIP    = 363,
+    PALADIN_SPEC_RETRIBUTION    = 381,
+    PALADIN_SPEC_HOLY           = 382,
+    PALADIN_SPEC_PROTECTION     = 383,
+    DEATHKNIGHT_SPEC_BLOOD      = 398,
+    DEATHKNIGHT_SPEC_FROST      = 399,
+    DEATHKNIGHT_SPEC_UNHOLY     = 400
 };
 
 struct TalentSpec
@@ -1454,7 +1491,9 @@ public:
         ORDERS_TANK                 = 0x01,             // bind attackers by gaining threat
         ORDERS_ASSIST               = 0x02,             // assist someone (dps type)
         ORDERS_HEAL                 = 0x04,             // concentrate on healing (no attacks, only self defense)
+        ORDERS_NODISPEL             = 0x08,
         ORDERS_PROTECT              = 0x10,             // combinable state: check if protectee is attacked
+        ORDERS_PASSIVE              = 0x20,             // bots do nothing
         ORDERS_PRIMARY              = 0x0F,
         ORDERS_SECONDARY            = 0xF0,
         ORDERS_RESET                = 0xFF
@@ -1473,7 +1512,10 @@ public:
         BOTSTATE_DEAD,              // we are dead and wait for becoming ghost
         BOTSTATE_DEADRELEASED,      // we released as ghost and wait to revive
         BOTSTATE_LOOTING,           // looting mode, used just after combat
-        BOTSTATE_FLYING             // bot is flying
+        BOTSTATE_FLYING,            // bot is flying
+        BOTSTATE_ENCHANT,           // bot is enchanting
+        BOTSTATE_CRAFT,             // bot is crafting
+        BOTSTATE_TAME               // bot hunter taming
     };
 
     enum CollectionFlags
@@ -1513,14 +1555,15 @@ public:
     {
         NOTHING                     = 0x00,
         INVENTORY_FULL              = 0x01,
-        CANT_AFFORD                 = 0x02
+        CANT_AFFORD                 = 0x02,
+        CANT_USE_TOO_FAR            = 0x03
     };
 
     typedef std::pair<enum TaskFlags, uint32> taskPair;
     typedef std::list<taskPair> BotTaskList;
     typedef std::list<enum NPCFlags> BotNPCList;
     typedef std::map<uint32, uint32> BotNeedItem;
-    typedef std::pair<uint32,uint32> talentPair;
+    typedef std::pair<uint32, uint32> talentPair;
     typedef std::list<ObjectGuid> BotObjectList;
     typedef std::list<uint32> BotEntryList;
     typedef std::vector<uint32> BotTaxiNode;
@@ -1561,7 +1604,9 @@ public:
         HL_SPELL,
         HL_TARGET,
         HL_NAME,
-        HL_AUCTION
+        HL_AUCTION,
+        HL_MAIL,
+        HL_RECIPE
     };
 
 public:
@@ -1600,6 +1645,9 @@ public:
     // Initialize spell using rank 1 spell id
     uint32 initSpell(uint32 spellId);
     uint32 initPetSpell(uint32 spellIconId);
+
+    // extract mail ids from links
+    void extractMailIds(const std::string& text, std::list<uint32>& mailIds) const;
 
     // extract quest ids from links
     void extractQuestIds(const std::string& text, std::list<uint32>& questIds) const;
@@ -1645,7 +1693,7 @@ public:
     std::list<TalentSpec> GetTalentSpecs(long specClass);
     TalentSpec GetTalentSpec(long specClass, long choice);
     TalentSpec GetActiveTalentSpec() { return m_activeTalentSpec; }
-    void ClearActiveTalentSpec() { m_activeTalentSpec.specName = ""; m_activeTalentSpec.specClass = 0; m_activeTalentSpec.specPurpose = TSP_NONE; for (int i=0; i<71; i++) m_activeTalentSpec.talentId[i] = 0; for (int i=0; i<3; i++) { m_activeTalentSpec.glyphIdMajor[i] = 0; m_activeTalentSpec.glyphIdMinor[i] = 0; } }
+    void ClearActiveTalentSpec() { m_activeTalentSpec.specName = ""; m_activeTalentSpec.specClass = 0; m_activeTalentSpec.specPurpose = TSP_NONE; for (int i = 0; i < 71; i++) m_activeTalentSpec.talentId[i] = 0; for (int i = 0; i < 3; i++) { m_activeTalentSpec.glyphIdMajor[i] = 0; m_activeTalentSpec.glyphIdMinor[i] = 0; } }
     void SetActiveTalentSpec(TalentSpec ts) { m_activeTalentSpec = ts; }
     bool ApplyActiveTalentSpec();
 
@@ -1666,6 +1714,8 @@ public:
 
     bool HasTool(uint32 TC);
     bool HasSpellReagents(uint32 spellId);
+    void ItemCountInInv(uint32 itemid, uint32 &count);
+    uint32 GetSpellCharges(uint32 spellId);
 
     uint8 GetHealthPercent(const Unit& target) const;
     uint8 GetHealthPercent() const;
@@ -1690,6 +1740,7 @@ public:
     Item* FindKeyForLockValue(uint32 reqSkillValue);
     Item* FindBombForLockValue(uint32 reqSkillValue);
     Item* FindConsumable(uint32 displayId) const;
+    uint8 _findItemSlot(Item* target);
     bool CanStore();
 
     // ******* Actions ****************************************
@@ -1794,6 +1845,7 @@ public:
     bool Deposit(const uint32 itemid);
     void BankBalance();
     std::string Cash(uint32 copper);
+    std::string AuctionResult(std::string subject, std::string body);
 
 protected:
     bool ValidateTalent(uint16 talent, long charClass);
@@ -1815,6 +1867,7 @@ private:
     void _HandleCommandDrop(std::string &text, Player &fromPlayer);
     void _HandleCommandRepair(std::string &text, Player &fromPlayer);
     void _HandleCommandAuction(std::string &text, Player &fromPlayer);
+    void _HandleCommandMail(std::string &text, Player &fromPlayer);
     void _HandleCommandBank(std::string &text, Player &fromPlayer);
     void _HandleCommandTalent(std::string &text, Player &fromPlayer);
     void _HandleCommandUse(std::string &text, Player &fromPlayer);
@@ -1823,6 +1876,9 @@ private:
     void _HandleCommandGet(std::string &text, Player &fromPlayer);
     void _HandleCommandCollect(std::string &text, Player &fromPlayer);
     void _HandleCommandQuest(std::string &text, Player &fromPlayer);
+    void _HandleCommandCraft(std::string &text, Player &fromPlayer);
+    void _HandleCommandEnchant(std::string &text, Player &fromPlayer);
+    void _HandleCommandProcess(std::string &text, Player &fromPlayer);
     void _HandleCommandPet(std::string &text, Player &fromPlayer);
     void _HandleCommandSpells(std::string &text, Player &fromPlayer);
     void _HandleCommandSurvey(std::string &text, Player &fromPlayer);
@@ -1884,10 +1940,12 @@ private:
     ObjectGuid m_lootPrev;              // previous loot
     BotEntryList m_collectObjects;      // object entries searched for in findNearbyGO
     BotTaxiNode m_taxiNodes;            // flight node chain;
+    BotEntryList m_noToolList;          // list of required tools
 
     uint8 m_collectionFlags;            // what the bot should look for to loot
     uint32 m_collectDist;               // distance to collect objects
     bool m_inventory_full;
+    uint32 m_itemTarget;
 
     time_t m_TimeDoneEating;
     time_t m_TimeDoneDrinking;
@@ -1916,7 +1974,8 @@ private:
     uint32 FISHING,
            HERB_GATHERING,
            MINING,
-           SKINNING;
+           SKINNING,
+           ASPECT_OF_THE_MONKEY;
 
     SpellRanges m_spellRangeMap;
 
