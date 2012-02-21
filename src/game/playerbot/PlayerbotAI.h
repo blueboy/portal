@@ -1348,33 +1348,33 @@ enum Glyphs
 };
 
 /**
- * So they're kept track of somewhere... but let's comment them out.
-   enum GlyphsUnknown
-   {
-    UNKNOWN_MAJOR_GLYPH_OF_NATURAL_FORCE             = 2,     // Unknown   Spell ID: 52084
-    UNKNOWN_UNKNOWN_GLYPH_CRUELTY                    = 21,    // Unknown   Spell ID: 12320
-    UNKNOWN_UNKNOWN_GLYPH_ANTICIPATION               = 22,    // Unknown   Spell ID: 12297
-    UNKNOWN_UNKNOWN_GLYPH_VENOMOUS_MANA              = 61,    // Unknown   Spell ID: 46831
-    UNKNOWN_MINOR_GLYPH_OF_NATURAL_FORCE             = 81,    // Unknown   Spell ID: 52084
-    UNKNOWN_UNKNOWN_GLYPH_GLYPH_OF_MOONFIRE          = 82,    // Unknown   Spell ID: 52085
-    UNKNOWN_MAJOR_                                   = 101,   // Unknown   Spell ID: NULL
-    UNKNOWN_UNKNOWN_GLYPH_COPY_OF_HOLY_BOLT          = 121,   // Unknown   Spell ID: 46487
-    UNKNOWN_MINOR_GLYPH_OF_THE_WHITE_BEAR            = 141,   // Unknown   Spell ID: 54292
-    UNKNOWN_MAJOR_GLYPH_OF_GROWLING                  = 163,   // Unknown   Spell ID: 54812
-    UNKNOWN_MINOR_GLYPH_OF_THE_RED_LYNX              = 182,   // Unknown   Spell ID: 54912
-    UNKNOWN_MAJOR_GLYPH_OF_LAVA                      = 214,   // Unknown   Spell ID: 55454
-    UNKNOWN_MAJOR_GLYPH_OF_MANA_TIDE                 = 227,   // Unknown   Spell ID: 55441
-    UNKNOWN_MAJOR_GLYPH_OF_MOLTEN_ARMOR              = 328,   // Unknown   Spell ID: 56382
-    UNKNOWN_MAJOR_GLYPH_OF_THE_HAWK                  = 363,   // Unknown   Spell ID: 56856
-    UNKNOWN_MINOR_GLYPH_OF_THE_FOREST_LYNX           = 436,   // Unknown   Spell ID: 58133
-    UNKNOWN_MINOR_GLYPH_OF_THE_BLACK_BEAR            = 438,   // Unknown   Spell ID: 58132
-    UNKNOWN_MINOR_GLYPH_OF_THE_BEAR_CUB              = 449,   // Unknown   Spell ID: 58136
-    UNKNOWN_MINOR_GLYPH_OF_THE_ARCTIC_WOLF           = 471,   // Unknown   Spell ID: 58135
-    UNKNOWN_MINOR_GLYPH_OF_THE_BLACK_WOLF            = 472,   // Unknown   Spell ID: 58134
-    UNKNOWN_MINOR_GLYPH_OF_CURSE_OF_EXHAUSION        = 480,   // Unknown   Spell ID: 58080
-    UNKNOWN_MINOR_GLYPH_OF_BLAST_WAVE                = 611,   // Unknown   Spell ID: 62126
-    UNKNOWN_MAJOR_GLYPH_OF_ENVENOM                   = 791,   // Unknown   Spell ID: 64199
-   };*/
+* So they're kept track of somewhere... but let's comment them out.
+enum GlyphsUnknown
+{
+UNKNOWN_MAJOR_GLYPH_OF_NATURAL_FORCE             = 2,     // Unknown   Spell ID: 52084
+UNKNOWN_UNKNOWN_GLYPH_CRUELTY                    = 21,    // Unknown   Spell ID: 12320
+UNKNOWN_UNKNOWN_GLYPH_ANTICIPATION               = 22,    // Unknown   Spell ID: 12297
+UNKNOWN_UNKNOWN_GLYPH_VENOMOUS_MANA              = 61,    // Unknown   Spell ID: 46831
+UNKNOWN_MINOR_GLYPH_OF_NATURAL_FORCE             = 81,    // Unknown   Spell ID: 52084
+UNKNOWN_UNKNOWN_GLYPH_GLYPH_OF_MOONFIRE          = 82,    // Unknown   Spell ID: 52085
+UNKNOWN_MAJOR_                                   = 101,   // Unknown   Spell ID: NULL
+UNKNOWN_UNKNOWN_GLYPH_COPY_OF_HOLY_BOLT          = 121,   // Unknown   Spell ID: 46487
+UNKNOWN_MINOR_GLYPH_OF_THE_WHITE_BEAR            = 141,   // Unknown   Spell ID: 54292
+UNKNOWN_MAJOR_GLYPH_OF_GROWLING                  = 163,   // Unknown   Spell ID: 54812
+UNKNOWN_MINOR_GLYPH_OF_THE_RED_LYNX              = 182,   // Unknown   Spell ID: 54912
+UNKNOWN_MAJOR_GLYPH_OF_LAVA                      = 214,   // Unknown   Spell ID: 55454
+UNKNOWN_MAJOR_GLYPH_OF_MANA_TIDE                 = 227,   // Unknown   Spell ID: 55441
+UNKNOWN_MAJOR_GLYPH_OF_MOLTEN_ARMOR              = 328,   // Unknown   Spell ID: 56382
+UNKNOWN_MAJOR_GLYPH_OF_THE_HAWK                  = 363,   // Unknown   Spell ID: 56856
+UNKNOWN_MINOR_GLYPH_OF_THE_FOREST_LYNX           = 436,   // Unknown   Spell ID: 58133
+UNKNOWN_MINOR_GLYPH_OF_THE_BLACK_BEAR            = 438,   // Unknown   Spell ID: 58132
+UNKNOWN_MINOR_GLYPH_OF_THE_BEAR_CUB              = 449,   // Unknown   Spell ID: 58136
+UNKNOWN_MINOR_GLYPH_OF_THE_ARCTIC_WOLF           = 471,   // Unknown   Spell ID: 58135
+UNKNOWN_MINOR_GLYPH_OF_THE_BLACK_WOLF            = 472,   // Unknown   Spell ID: 58134
+UNKNOWN_MINOR_GLYPH_OF_CURSE_OF_EXHAUSION        = 480,   // Unknown   Spell ID: 58080
+UNKNOWN_MINOR_GLYPH_OF_BLAST_WAVE                = 611,   // Unknown   Spell ID: 62126
+UNKNOWN_MAJOR_GLYPH_OF_ENVENOM                   = 791,   // Unknown   Spell ID: 64199
+};*/
 
 // TODO: replace this with mangos data... I mean this has GOT to be out there somewhere already
 //       and when you do, don't forget to change everywhere (including the sql file)
@@ -1491,12 +1491,22 @@ public:
         ORDERS_TANK                 = 0x01,             // bind attackers by gaining threat
         ORDERS_ASSIST               = 0x02,             // assist someone (dps type)
         ORDERS_HEAL                 = 0x04,             // concentrate on healing (no attacks, only self defense)
-        ORDERS_NODISPEL             = 0x08,
+        ORDERS_NODISPEL             = 0x08,				// Dont dispel anything
         ORDERS_PROTECT              = 0x10,             // combinable state: check if protectee is attacked
         ORDERS_PASSIVE              = 0x20,             // bots do nothing
+        ORDERS_RESIST				= 0x40,				// resist a magic school(see below for types)
         ORDERS_PRIMARY              = 0x0F,
         ORDERS_SECONDARY            = 0xF0,
         ORDERS_RESET                = 0xFF
+    };
+
+    enum ResistType
+    {
+        SCHOOL_NONE		= 0,
+        SCHOOL_FIRE		= 1,
+        SCHOOL_NATURE	= 2,
+        SCHOOL_FROST	= 3,
+        SCHOOL_SHADOW	= 4
     };
 
     enum CombatTargetType
@@ -1633,6 +1643,8 @@ public:
 
     // Returns what kind of situation we are in so the ai can react accordingly
     ScenarioType GetScenarioType() { return m_ScenarioType; }
+    CombatStyle GetCombatStyle() { return m_combatStyle; }
+    void SetCombatStyle(CombatStyle cs) { m_combatStyle = cs; }
 
     PlayerbotClassAI* GetClassAI() { return m_classAI; }
     PlayerbotMgr* GetManager() { return m_mgr; }
@@ -1768,6 +1780,25 @@ public:
     //void Stay();
     //bool Follow(Player& player);
     void SendNotEquipList(Player& player);
+    uint32 AutoCrafting; //switch for bot auto tradeskills
+    uint32 AutoCraftClass;
+    uint32 AutoCraftCategory;
+    uint32 AutoEquipPlug;               //switch for autoequip
+    uint32 SellWhite;					//switch for white item auto sell
+    uint8 DistOverRide;
+    float gDist[2]; //gDist, gTemp vars are used for variable follow distance
+    float gTempDist;
+    float gTempDist2;
+    uint8 FollowAutoGo;
+    uint8 IsUpOrDown; //tracks variable follow distance
+    void _HandleCommandAutoEquip(std::string &text, Player &fromPlayer);
+    void _HandleCommandAutoInventoryCheck(std::string &text, Player &fromPlayer);
+    void AutoUpgradeEquipment(Player& player);
+    void FollowAutoReset(Player& player);
+    void AutoInventoryCheck(Player& player);
+    void AutoEquipComparison(Item *pItem, Item *pItem2);
+    void AutoCraft(Player& player);
+    bool ItemStatComparison(const ItemPrototype *pProto, const ItemPrototype *pProto2);
     void Feast();
     void InterruptCurrentCastingSpell();
     void GetCombatTarget(Unit* forcedTarged = 0);
@@ -1817,6 +1848,7 @@ public:
     void SetCombatOrderByStr(std::string str, Unit *target = 0);
     void SetCombatOrder(CombatOrderType co, Unit *target = 0);
     CombatOrderType GetCombatOrder() { return this->m_combatOrder; }
+    ResistType GetResistType() { return this->m_resistType; }
     void SetMovementOrder(MovementOrderType mo, Unit *followTarget = 0);
     MovementOrderType GetMovementOrder() { return this->m_movementOrder; }
     void MovementReset();
@@ -1831,7 +1863,7 @@ public:
     void GameObjectLocalization(std::string& gameobjectName, const uint32 entry) const;
 
     uint8 GetFreeBagSpace() const;
-    void SellGarbage(bool listNonTrash = true, bool bDetailTrashSold = false, bool verbose = true);
+    void SellGarbage(Player& player, bool listNonTrash = true, bool bDetailTrashSold = false, bool verbose = true);
     void Sell(const uint32 itemid);
     void Buy(ObjectGuid vendorguid, const uint32 itemid);
     std::string DropItem(const uint32 itemid);
@@ -1916,6 +1948,7 @@ private:
 
     CombatStyle m_combatStyle;
     CombatOrderType m_combatOrder;
+    ResistType m_resistType;
     MovementOrderType m_movementOrder;
 
     TalentSpec m_activeTalentSpec;
@@ -1970,10 +2003,10 @@ private:
     Unit *m_followTarget;       // whom to follow in non combat situation?
 
     uint32 FISHING,
-           HERB_GATHERING,
-           MINING,
-           SKINNING,
-           ASPECT_OF_THE_MONKEY;
+        HERB_GATHERING,
+        MINING,
+        SKINNING,
+        ASPECT_OF_THE_MONKEY;
 
     SpellRanges m_spellRangeMap;
 

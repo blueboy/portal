@@ -1,5 +1,7 @@
 #include "PlayerbotShamanAI.h"
 #include "../SpellAuras.h"
+#include "PlayerbotDeathKnightAI.h"
+#include "../Totem.h"
 
 class PlayerbotAI;
 PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, PlayerbotAI* const ai) : PlayerbotClassAI(master, bot, ai)
@@ -19,6 +21,8 @@ PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, Pl
     MANA_TIDE_TOTEM          = ai->initSpell(MANA_TIDE_TOTEM_1);
     CURE_TOXINS              = ai->initSpell(CURE_TOXINS_1);
     CLEANSE_SPIRIT           = ai->initSpell(CLEANSE_SPIRIT_1);
+	NATURES_SWIFTNESS_SHAMAN = ai->initSpell(NATURES_SWIFTNESS_SHAMAN_1);
+	TIDAL_FORCE				 = ai->initSpell(TIDAL_FORCE_1);
     // enhancement
     FOCUSED                  = 0; // Focused what?
     STORMSTRIKE              = ai->initSpell(STORMSTRIKE_1);
@@ -43,6 +47,7 @@ PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, Pl
     STONESKIN_TOTEM          = ai->initSpell(STONESKIN_TOTEM_1);
     WRATH_OF_AIR_TOTEM       = ai->initSpell(WRATH_OF_AIR_TOTEM_1);
     EARTH_ELEMENTAL_TOTEM    = ai->initSpell(EARTH_ELEMENTAL_TOTEM_1);
+	MAELSTROM_WEAPON			 = ai->initSpell(MAELSTROM_WEAPON_1);
     // elemental
     LIGHTNING_BOLT           = ai->initSpell(LIGHTNING_BOLT_1);
     EARTH_SHOCK              = ai->initSpell(EARTH_SHOCK_1);
@@ -60,6 +65,8 @@ PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, Pl
     EARTHBIND_TOTEM          = ai->initSpell(EARTHBIND_TOTEM_1);
     TOTEM_OF_WRATH           = ai->initSpell(TOTEM_OF_WRATH_1);
     FIRE_ELEMENTAL_TOTEM     = ai->initSpell(FIRE_ELEMENTAL_TOTEM_1);
+	ELEMENTAL_MASTERY		 = ai->initSpell(ELEMENTAL_MASTERY_1);
+	THUNDERSTORM			 = ai->initSpell(THUNDERSTORM_1);
 
     RECENTLY_BANDAGED        = 11196; // first aid check
 
@@ -68,6 +75,30 @@ PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, Pl
     BLOOD_FURY               = ai->initSpell(BLOOD_FURY_SHAMAN); // orc
     WAR_STOMP                = ai->initSpell(WAR_STOMP_ALL); // tauren
     BERSERKING               = ai->initSpell(BERSERKING_ALL); // troll
+
+	// totem buffs
+	STRENGTH_OF_EARTH_EFFECT	= ai->initSpell(STRENGTH_OF_EARTH_EFFECT_1);
+	FLAMETONGUE_EFFECT			= ai->initSpell(FLAMETONGUE_EFFECT_1);
+	MAGMA_TOTEM_EFFECT			= ai->initSpell(MAGMA_TOTEM_EFFECT_1);
+	STONECLAW_EFFECT			= ai->initSpell(STONECLAW_EFFECT_1);
+	FIRE_RESISTANCE_EFFECT		= ai->initSpell(FIRE_RESISTANCE_EFFECT_1);
+	FROST_RESISTANCE_EFFECT		= ai->initSpell(FROST_RESISTANCE_EFFECT_1);
+	GROUDNING_EFFECT			= ai->initSpell(GROUDNING_EFFECT_1);
+	NATURE_RESISTANCE_EFFECT	= ai->initSpell(NATURE_RESISTANCE_EFFECT_1);
+	STONESKIN_EFFECT			= ai->initSpell(STONESKIN_EFFECT_1);
+	WINDFURY_EFFECT				= ai->initSpell(WINDFURY_EFFECT_1);
+	WRATH_OF_AIR_EFFECT			= ai->initSpell(WRATH_OF_AIR_EFFECT_1);
+	CLEANSING_TOTEM_EFFECT		= ai->initSpell(CLEANSING_TOTEM_EFFECT_1);
+	HEALING_STREAM_EFFECT		= ai->initSpell(HEALING_STREAM_EFFECT_1);
+	MANA_SPRING_EFFECT			= ai->initSpell(MANA_SPRING_EFFECT_1);
+	TREMOR_TOTEM_EFFECT			= ai->initSpell(TREMOR_TOTEM_EFFECT_1);
+	TOTEM_OF_WRATH_EFFECT		= ai->initSpell(TOTEM_OF_WRATH_EFFECT_1);
+	STONECLAW_EFFECT			= ai->initSpell(STONECLAW_EFFECT_1);
+	EARTHBIND_EFFECT			= ai->initSpell(EARTHBIND_EFFECT_1);
+
+	// Buffs that don't stack with totems
+	IMPROVED_ICY_TALONS		= ai->initSpell(IMPROVED_ICY_TALONS_1);
+	HORN_OF_WINTER			= ai->initSpell(HORN_OF_WINTER_1);
 }
 
 PlayerbotShamanAI::~PlayerbotShamanAI() {}
@@ -111,11 +142,165 @@ void PlayerbotShamanAI::HealTarget(Unit &target, uint8 hp)
                     ai->CastSpell(DISPEL, target);
             }
             else if ((1 << holder->GetSpellProto()->Dispel) & dispelMask3 & (DISPEL == CLEANSE_SPIRIT))
+			{
                 if (holder->GetSpellProto()->Dispel == DISPEL_CURSE)
                     ai->CastSpell(DISPEL, target);
+			}
         }
     }
     // end HealTarget
+}
+
+void PlayerbotShamanAI::DropTotems()
+{
+	PlayerbotAI* ai = GetAI();
+	Player *m_bot = GetPlayerBot();
+	uint32 spec = m_bot->GetSpec();
+
+	Totem* earth = m_bot->GetTotem(TOTEM_SLOT_EARTH);
+	Totem* fire = m_bot->GetTotem(TOTEM_SLOT_FIRE);
+	Totem* water = m_bot->GetTotem(TOTEM_SLOT_WATER);
+	Totem* air = m_bot->GetTotem(TOTEM_SLOT_AIR);
+
+	switch (spec)
+	{
+		case SHAMAN_SPEC_ENHANCEMENT:
+			// Earth Totems 
+			if (STRENGTH_OF_EARTH_TOTEM > 0 && ((earth == NULL) ||(m_bot->GetDistance(earth) > 30)) && ai->GetManaPercent() >= 13)
+				ai->CastSpell(STRENGTH_OF_EARTH_TOTEM);
+			// Fire Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FROST && FROST_RESISTANCE_TOTEM > 0 && ((fire == NULL) ||(m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FROST_RESISTANCE_TOTEM);
+			else if (FLAMETONGUE_TOTEM > 0 && ((fire == NULL) ||( m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 14)
+                ai->CastSpell(FLAMETONGUE_TOTEM);
+			// Air totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_NATURE && NATURE_RESISTANCE_TOTEM > 0 && ((air == NULL) ||(m_bot->GetDistance(air) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(NATURE_RESISTANCE_TOTEM);
+			else if (WIND_FURY_TOTEM > 0 && ((air == NULL) ||( m_bot->GetDistance(air) > 30)) /*&& !m_bot->HasAura(IMPROVED_ICY_TALONS)*/ && ai->GetManaPercent() >= 11)
+                ai->CastSpell(WIND_FURY_TOTEM);
+			// Water Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FIRE && FIRE_RESISTANCE_TOTEM > 0 && ((water == NULL) ||(m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FIRE_RESISTANCE_TOTEM);
+			else if (MANA_SPRING_TOTEM > 0 && ((water == NULL) || (m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 5)
+				ai->CastSpell(MANA_SPRING_TOTEM);
+            break;
+
+        case SHAMAN_SPEC_RESTORATION:
+			// Earth Totems 
+            if (STRENGTH_OF_EARTH_TOTEM > 0 && ((earth == NULL) || (m_bot->GetDistance(earth) > 30)) && ai->GetManaPercent() >= 13)
+                ai->CastSpell(STRENGTH_OF_EARTH_TOTEM);
+			// Fire Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FROST && FROST_RESISTANCE_TOTEM > 0 && ((fire == NULL) ||(m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FROST_RESISTANCE_TOTEM);
+            else if (FLAMETONGUE_TOTEM > 0 && ((fire == NULL) || (m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 14)
+                ai->CastSpell(FLAMETONGUE_TOTEM);
+			// Air totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_NATURE && NATURE_RESISTANCE_TOTEM > 0 && ((air == NULL) ||(m_bot->GetDistance(air) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(NATURE_RESISTANCE_TOTEM);
+            else if (WRATH_OF_AIR_TOTEM > 0 && ((air == NULL) || (m_bot->GetDistance(air) > 30)) && ai->GetManaPercent() >= 11)
+                ai->CastSpell(WRATH_OF_AIR_TOTEM);
+			// Water Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FIRE && FIRE_RESISTANCE_TOTEM > 0 && ((water == NULL) ||(m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FIRE_RESISTANCE_TOTEM);
+            else if (MANA_SPRING_TOTEM > 0 && ((water == NULL) || (m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 5)
+                ai->CastSpell(MANA_SPRING_TOTEM);
+            break;
+
+        case SHAMAN_SPEC_ELEMENTAL:
+			// Earth Totems 
+            if (STRENGTH_OF_EARTH_TOTEM > 0 && ((earth == NULL) || (m_bot->GetDistance(earth) > 30)) && ai->GetManaPercent() >= 13)
+                ai->CastSpell(STRENGTH_OF_EARTH_TOTEM);
+			// Fire Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FROST && FROST_RESISTANCE_TOTEM > 0 && ((fire == NULL) ||(m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FROST_RESISTANCE_TOTEM);
+            else if (TOTEM_OF_WRATH > 0 && ((fire == NULL) || (m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 5)
+                ai->CastSpell(TOTEM_OF_WRATH);
+             // If the spec didn't take totem of wrath, use flametongue
+            else if (TOTEM_OF_WRATH == 0 && ((fire == NULL) || (m_bot->GetDistance(fire) > 30)) && ai->GetManaPercent() >= 14)
+                ai->CastSpell(FLAMETONGUE_TOTEM);
+			// Air totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_NATURE && NATURE_RESISTANCE_TOTEM > 0 && ((air == NULL) ||(m_bot->GetDistance(air) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(NATURE_RESISTANCE_TOTEM);
+            else if (WRATH_OF_AIR_TOTEM > 0 && ((air == NULL) || (m_bot->GetDistance(air) > 30)) && ai->GetManaPercent() >= 11)
+                ai->CastSpell(WRATH_OF_AIR_TOTEM);
+			// Water Totems
+			if (ai->GetResistType() == PlayerbotAI::SCHOOL_FIRE && FIRE_RESISTANCE_TOTEM > 0 && ((water == NULL) ||(m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 10)
+				ai->CastSpell(FIRE_RESISTANCE_TOTEM);
+            else if (MANA_SPRING_TOTEM > 0 && ((water == NULL) || (m_bot->GetDistance(water) > 30)) && ai->GetManaPercent() >= 5)
+                ai->CastSpell(MANA_SPRING_TOTEM);
+            break;
+    };
+}
+
+void PlayerbotShamanAI::CheckShields()
+{
+	PlayerbotAI* ai = GetAI();
+	Player *m_bot = GetPlayerBot();
+	uint32 spec = m_bot->GetSpec();
+
+	if (spec == SHAMAN_SPEC_ENHANCEMENT && LIGHTNING_SHIELD > 0 && !m_bot->HasAura(LIGHTNING_SHIELD, EFFECT_INDEX_0))
+		ai->CastSpell(LIGHTNING_SHIELD, *m_bot);
+	else if ((spec == SHAMAN_SPEC_ELEMENTAL || spec == SHAMAN_SPEC_RESTORATION) && WATER_SHIELD > 0 && !m_bot->HasAura(WATER_SHIELD, EFFECT_INDEX_0)) 
+		ai->CastSpell(WATER_SHIELD, *m_bot);
+	if (EARTH_SHIELD > 0 && !GetMaster()->HasAura(EARTH_SHIELD, EFFECT_INDEX_0))
+		ai->CastSpell(EARTH_SHIELD, *(GetMaster()));
+}
+
+void PlayerbotShamanAI::UseCooldowns()
+{
+	PlayerbotAI* ai = GetAI();
+	Player *m_bot = GetPlayerBot();
+	uint32 spec = m_bot->GetSpec();
+	
+	if (BLOODLUST > 0 &&(!GetMaster()->HasAura(BLOODLUST, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 26)
+	{
+        ai->CastSpell(BLOODLUST);
+	}
+	else if (HEROISM > 0 &&(!GetMaster()->HasAura(HEROISM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 26)
+	{
+		ai->CastSpell(HEROISM);
+	}
+
+	switch(spec)
+	{
+		case SHAMAN_SPEC_ENHANCEMENT:
+			if (SHAMANISTIC_RAGE > 0 && ai->GetManaPercent() <= 15)
+            {
+                ai->CastSpell(SHAMANISTIC_RAGE, *m_bot);
+            }
+			else if (FERAL_SPIRIT > 0 && ai->GetManaPercent() >= 12)
+            {
+                ai->CastSpell(FERAL_SPIRIT);
+            }
+			break;
+
+		case SHAMAN_SPEC_ELEMENTAL:
+			if (ELEMENTAL_MASTERY > 0)
+			{
+				ai->CastSpell(ELEMENTAL_MASTERY, *m_bot);
+			}
+			else if (THUNDERSTORM > 0 && ai->GetManaPercent() <= 8)
+			{
+				ai->CastSpell(THUNDERSTORM, *m_bot);
+			}
+			break;
+
+		case SHAMAN_SPEC_RESTORATION:
+			if (MANA_TIDE_TOTEM > 0 && ai->GetManaPercent() < 50)
+            {
+                ai->CastSpell(MANA_TIDE_TOTEM);
+                break;
+            }
+			else if (NATURES_SWIFTNESS_SHAMAN > 0)
+			{
+				ai->CastSpell(NATURES_SWIFTNESS_SHAMAN);
+			}
+			else if (TIDAL_FORCE > 0)
+			{
+				ai->CastSpell(TIDAL_FORCE);
+                break;
+            }
+	}
 }
 
 void PlayerbotShamanAI::DoNextCombatManeuver(Unit *pTarget)
@@ -135,6 +320,7 @@ void PlayerbotShamanAI::DoNextCombatManeuver(Unit *pTarget)
 
     Player *m_bot = GetPlayerBot();
     Group *m_group = m_bot->GetGroup();
+	uint32 spec = m_bot->GetSpec();
 
     // Heal myself
     if (ai->GetHealthPercent() < 30 && ai->GetManaPercent() >= 32)
@@ -171,161 +357,84 @@ void PlayerbotShamanAI::DoNextCombatManeuver(Unit *pTarget)
     }
 
     // Damage Spells
-
-    switch (SpellSequence)
+	DropTotems();
+	CheckShields();
+	UseCooldowns();
+    switch (spec)
     {
-        case SPELL_ENHANCEMENT:
-            if (STRENGTH_OF_EARTH_TOTEM > 0 && LastSpellEnhancement == 1 && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 13)
-            {
-                ai->CastSpell(STRENGTH_OF_EARTH_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (STONESKIN_TOTEM > 0 && LastSpellEnhancement == 5 && (!m_bot->HasAura(STONESKIN_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 13)
-            {
+        case SHAMAN_SPEC_ENHANCEMENT:
+            /*else if (STONESKIN_TOTEM > 0 && LastSpellEnhancement == 5 && (!m_bot->HasAura(STONESKIN_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 13)
+               {
                 ai->CastSpell(STONESKIN_TOTEM);
                 SpellSequence = SPELL_RESTORATION;
                 LastSpellEnhancement = LastSpellEnhancement + 1;
                 break;
-            }
-            else if (FOCUSED > 0 && LastSpellEnhancement == 2)
-            {
+               }*/
+            /*else if (FOCUSED > 0 && LastSpellEnhancement == 2)
+               {
                 ai->CastSpell(FOCUSED, *pTarget);
                 SpellSequence = SPELL_RESTORATION;
                 LastSpellEnhancement = LastSpellEnhancement + 1;
                 break;
-            }
-            else if (FROST_RESISTANCE_TOTEM > 0 && LastSpellEnhancement == 10 && (!m_bot->HasAura(FROST_RESISTANCE_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && (!m_bot->HasAura(FLAMETONGUE_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 10)
-            {
-                ai->CastSpell(FROST_RESISTANCE_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (FLAMETONGUE_TOTEM > 0 && LastSpellEnhancement == 15 && (!m_bot->HasAura(FLAMETONGUE_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && (!m_bot->HasAura(FROST_RESISTANCE_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 14)
-            {
-                ai->CastSpell(FLAMETONGUE_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (FIRE_RESISTANCE_TOTEM > 0 && LastSpellEnhancement == 20 && (!m_bot->HasAura(FIRE_RESISTANCE_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(HEALING_STREAM_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(MANA_SPRING_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 10)
-            {
-                ai->CastSpell(FIRE_RESISTANCE_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (GROUNDING_TOTEM > 0 && LastSpellEnhancement == 25 && (!m_bot->HasAura(GROUNDING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WRATH_OF_AIR_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WIND_FURY_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
-            {
-                ai->CastSpell(GROUNDING_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (NATURE_RESISTANCE_TOTEM > 0 && LastSpellEnhancement == 30 && (!m_bot->HasAura(NATURE_RESISTANCE_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WRATH_OF_AIR_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(GROUNDING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WIND_FURY_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 10)
-            {
-                ai->CastSpell(NATURE_RESISTANCE_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (WIND_FURY_TOTEM > 0 && LastSpellEnhancement == 35 && (!m_bot->HasAura(WIND_FURY_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WRATH_OF_AIR_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(GROUNDING_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 11)
-            {
-                ai->CastSpell(WIND_FURY_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (STORMSTRIKE > 0 && LastSpellEnhancement == 4 && (!pTarget->HasAura(STORMSTRIKE, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 8)
+               }*/
+            /* else if (GROUNDING_TOTEM > 0 && LastSpellEnhancement == 25 && (!m_bot->HasAura(GROUNDING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WRATH_OF_AIR_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(WIND_FURY_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
+               {
+                 ai->CastSpell(GROUNDING_TOTEM);
+                 SpellSequence = SPELL_RESTORATION;
+                 LastSpellEnhancement = LastSpellEnhancement + 1;
+                 break;
+               }*/
+
+            /*else*/ 
+			if (STORMSTRIKE > 0 && (LastSpellEnhancement == 0 || LastSpellEnhancement == 4) /*&& (!pTarget->HasAura(STORMSTRIKE, EFFECT_INDEX_0))*/ && ai->GetManaPercent() >= 8)
             {
                 ai->CastSpell(STORMSTRIKE, *pTarget);
-                SpellSequence = SPELL_RESTORATION;
                 LastSpellEnhancement = LastSpellEnhancement + 1;
                 break;
             }
-            else if (LAVA_LASH > 0 && LastSpellEnhancement == 6 && ai->GetManaPercent() >= 4)
+			else if (FLAME_SHOCK > 0 && LastSpellEnhancement == 1 /*&& (!pTarget->HasAura(FLAME_SHOCK, EFFECT_INDEX_0))*/ && ai->GetManaPercent() >= 22)
+            {
+                ai->CastSpell(FLAME_SHOCK, *pTarget);
+                LastSpellEnhancement = LastSpellEnhancement + 1;
+                break;
+            }
+			else if (EARTH_SHOCK > 0 && LastSpellEnhancement == 5 && ai->GetManaPercent() >= 23)
+            {
+                ai->CastSpell(EARTH_SHOCK, *pTarget);
+                LastSpellEnhancement = LastSpellEnhancement + 1;
+                break;
+            }
+            else if (LAVA_LASH > 0 && (LastSpellEnhancement == 2 || LastSpellEnhancement == 6) && ai->GetManaPercent() >= 4)
             {
                 ai->CastSpell(LAVA_LASH, *pTarget);
-                SpellSequence = SPELL_RESTORATION;
                 LastSpellEnhancement = LastSpellEnhancement + 1;
                 break;
             }
-            else if (FERAL_SPIRIT > 0 && LastSpellEnhancement == 7 && ai->GetManaPercent() >= 12)
+			else if (MAELSTROM_WEAPON > 0 && LIGHTNING_BOLT > 0 && (LastSpellEnhancement == 3 || LastSpellEnhancement == 7) && m_bot->HasAura(MAELSTROM_WEAPON) && ai->GetManaPercent() >= 13)
             {
-                ai->CastSpell(FERAL_SPIRIT);
-                SpellSequence = SPELL_RESTORATION;
+                ai->CastSpell(LIGHTNING_BOLT, *pTarget);
                 LastSpellEnhancement = LastSpellEnhancement + 1;
+				if (LastSpellEnhancement == 8)
+					LastSpellEnhancement = 0;
                 break;
             }
-            else if (WRATH_OF_AIR_TOTEM > 0 && (!m_bot->HasAura(WRATH_OF_AIR_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(GROUNDING_TOTEM, EFFECT_INDEX_0)) && LastSpellEnhancement == 40)
-            {
-                ai->CastSpell(WRATH_OF_AIR_TOTEM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (EARTH_ELEMENTAL_TOTEM > 0 && LastSpellEnhancement == 45 && ai->GetManaPercent() >= 24)
-            {
+            /*else if (EARTH_ELEMENTAL_TOTEM > 0 && LastSpellEnhancement == 45 && ai->GetManaPercent() >= 24)
+               {
                 ai->CastSpell(EARTH_ELEMENTAL_TOTEM);
                 SpellSequence = SPELL_RESTORATION;
                 LastSpellEnhancement = LastSpellEnhancement + 1;
                 break;
-            }
-            else if (BLOODLUST > 0 && LastSpellEnhancement == 8 && (!GetMaster()->HasAura(BLOODLUST, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 26)
-            {
-                ai->CastSpell(BLOODLUST);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (HEROISM > 0 && LastSpellEnhancement == 10 && (!GetMaster()->HasAura(HEROISM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 26)
-            {
-                ai->CastSpell(HEROISM);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (SHAMANISTIC_RAGE > 0 && (!m_bot->HasAura(SHAMANISTIC_RAGE, EFFECT_INDEX_0)) && LastSpellEnhancement == 11)
-            {
-                ai->CastSpell(SHAMANISTIC_RAGE, *m_bot);
-                SpellSequence = SPELL_RESTORATION;
-                LastSpellEnhancement = LastSpellEnhancement + 1;
-                break;
-            }
-            else if (LastSpellEnhancement > 50)
-            {
-                LastSpellEnhancement = 1;
-                SpellSequence = SPELL_RESTORATION;
-                break;
-            }
-            LastSpellEnhancement = LastSpellEnhancement + 1;
-        //SpellSequence = SPELL_RESTORATION;
-        //break;
+               }*/
 
-        case SPELL_RESTORATION:
-            if (HEALING_STREAM_TOTEM > 0 && LastSpellRestoration < 3 && ai->GetHealthPercent() < 50 && (!m_bot->HasAura(HEALING_STREAM_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(MANA_SPRING_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 4)
-            {
+        case SHAMAN_SPEC_RESTORATION:
+            /*if (HEALING_STREAM_TOTEM > 0 && LastSpellRestoration < 3 && ai->GetHealthPercent() < 50 && (!m_bot->HasAura(HEALING_STREAM_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(MANA_SPRING_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 4)
+               {
                 ai->CastSpell(HEALING_STREAM_TOTEM);
                 SpellSequence = SPELL_ELEMENTAL;
                 LastSpellRestoration = LastSpellRestoration + 1;
                 break;
-            }
-            else if (MANA_SPRING_TOTEM > 0 && LastSpellRestoration < 4 && (!m_bot->HasAura(MANA_SPRING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(HEALING_STREAM_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
-            {
-                ai->CastSpell(MANA_SPRING_TOTEM);
-                SpellSequence = SPELL_ELEMENTAL;
-                LastSpellRestoration = LastSpellRestoration + 1;
-                break;
-            }
-            else if (MANA_TIDE_TOTEM > 0 && LastSpellRestoration < 5 && ai->GetManaPercent() < 50 && ai->GetManaPercent() >= 3)
-            {
-                ai->CastSpell(MANA_TIDE_TOTEM);
-                SpellSequence = SPELL_ELEMENTAL;
-                LastSpellRestoration = LastSpellRestoration + 1;
-                break;
-            }
+               }*/
+            /*else*/ 
             /*else if (TREMOR_TOTEM > 0 && LastSpellRestoration < 6 && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 2)
                {
                 ai->CastSpell(TREMOR_TOTEM);
@@ -333,122 +442,97 @@ void PlayerbotShamanAI::DoNextCombatManeuver(Unit *pTarget)
                 LastSpellRestoration = LastSpellRestoration +1;
                 break;
                }*/
-            else if (LastSpellRestoration > 6)
+
+        case SHAMAN_SPEC_ELEMENTAL:
+			if (FLAME_SHOCK > 0 && (!pTarget->HasAura(FLAME_SHOCK)) && ai->GetManaPercent() >= 22)
             {
-                LastSpellRestoration = 0;
-                SpellSequence = SPELL_ELEMENTAL;
+                ai->CastSpell(FLAME_SHOCK, *pTarget);
                 break;
             }
-            LastSpellRestoration = LastSpellRestoration + 1;
-        //SpellSequence = SPELL_ELEMENTAL;
-        //break;
-
-        case SPELL_ELEMENTAL:
-            if (LIGHTNING_BOLT > 0 && LastSpellElemental == 1 && ai->GetManaPercent() >= 13)
+			else if (LAVA_BURST > 0 && (LastSpellElemental == 0) && (pTarget->HasAura(FLAME_SHOCK)) && ai->GetManaPercent() >= 10)
+            {
+                ai->CastSpell(LAVA_BURST, *pTarget);
+				LastSpellElemental = LastSpellElemental + 1;
+                break;
+            }
+            else if (LIGHTNING_BOLT > 0 && ai->GetManaPercent() >= 13)
             {
                 ai->CastSpell(LIGHTNING_BOLT, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
+				LastSpellElemental = LastSpellElemental + 1;
+				if (LastSpellElemental == 5)
+					LastSpellElemental = 0;
                 break;
             }
-            else if (SEARING_TOTEM > 0 && LastSpellElemental == 2 && (!pTarget->HasAura(SEARING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 9)
-            {
+            /*else if (SEARING_TOTEM > 0 && LastSpellElemental == 2 && (!pTarget->HasAura(SEARING_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 9)
+               {
                 ai->CastSpell(SEARING_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (STONECLAW_TOTEM > 0 && ai->GetHealthPercent() < 51 && LastSpellElemental == 3 && (!pTarget->HasAura(STONECLAW_TOTEM, EFFECT_INDEX_0)) && (!pTarget->HasAura(EARTHBIND_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 8)
-            {
+               }*/
+            /*else if (STONECLAW_TOTEM > 0 && ai->GetHealthPercent() < 51 && LastSpellElemental == 3 && (!pTarget->HasAura(STONECLAW_TOTEM, EFFECT_INDEX_0)) && (!pTarget->HasAura(EARTHBIND_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 8)
+               {
                 ai->CastSpell(STONECLAW_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (FLAME_SHOCK > 0 && LastSpellElemental == 4 && (!pTarget->HasAura(FLAME_SHOCK, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 22)
-            {
-                ai->CastSpell(FLAME_SHOCK, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (LAVA_BURST > 0 && LastSpellElemental == 5 && (pTarget->HasAura(FLAME_SHOCK, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 10)
-            {
-                ai->CastSpell(LAVA_BURST, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (MAGMA_TOTEM > 0 && LastSpellElemental == 6 && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 35)
-            {
+               }*/
+            /*else if (MAGMA_TOTEM > 0 && LastSpellElemental == 6 && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 35)
+               {
                 ai->CastSpell(MAGMA_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (EARTHBIND_TOTEM > 0 && LastSpellElemental == 7 && (!pTarget->HasAura(EARTHBIND_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
-            {
+               }*/
+            /*else if (EARTHBIND_TOTEM > 0 && LastSpellElemental == 7 && (!pTarget->HasAura(EARTHBIND_TOTEM, EFFECT_INDEX_0)) && (!m_bot->HasAura(STRENGTH_OF_EARTH_TOTEM, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
+               {
                 ai->CastSpell(EARTHBIND_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (EARTH_SHOCK > 0 && LastSpellElemental == 8 && ai->GetManaPercent() >= 23)
-            {
-                ai->CastSpell(EARTH_SHOCK, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (PURGE > 0 && LastSpellElemental == 9 && ai->GetManaPercent() >= 8)
-            {
-                ai->CastSpell(PURGE, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (WIND_SHOCK > 0 && LastSpellElemental == 10 && ai->GetManaPercent() >= 8)
-            {
-                ai->CastSpell(WIND_SHOCK, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (FIRE_NOVA_TOTEM > 0 && LastSpellElemental == 11 && ai->GetManaPercent() >= 33)
-            {
+               }*/
+            //else if (PURGE > 0 && LastSpellElemental == 9 && ai->GetManaPercent() >= 8)
+            //{
+            //    ai->CastSpell(PURGE, *pTarget);
+            //    SpellSequence = SPELL_ENHANCEMENT;
+            //    LastSpellElemental = LastSpellElemental + 1;
+            //    break;
+            //}
+            //else if (WIND_SHOCK > 0 && LastSpellElemental == 10 && ai->GetManaPercent() >= 8)
+            //{
+            //    ai->CastSpell(WIND_SHOCK, *pTarget);
+            //    SpellSequence = SPELL_ENHANCEMENT;
+            //    LastSpellElemental = LastSpellElemental + 1;
+            //    break;
+            //}
+            /*else if (FIRE_NOVA_TOTEM > 0 && LastSpellElemental == 11 && ai->GetManaPercent() >= 33)
+               {
                 ai->CastSpell(FIRE_NOVA_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (FROST_SHOCK > 0 && LastSpellElemental == 12 && (!pTarget->HasAura(FROST_SHOCK, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 23)
-            {
+               }*/
+            /*else if (FROST_SHOCK > 0 && LastSpellElemental == 12 && (!pTarget->HasAura(FROST_SHOCK, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 23)
+               {
                 ai->CastSpell(FROST_SHOCK, *pTarget);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
-            else if (CHAIN_LIGHTNING > 0 && LastSpellElemental == 13 && ai->GetManaPercent() >= 33)
-            {
-                ai->CastSpell(CHAIN_LIGHTNING, *pTarget);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (TOTEM_OF_WRATH > 0 && LastSpellElemental == 14 && (!m_bot->HasAura(TOTEM_OF_WRATH, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 5)
-            {
-                ai->CastSpell(TOTEM_OF_WRATH);
-                SpellSequence = SPELL_ENHANCEMENT;
-                LastSpellElemental = LastSpellElemental + 1;
-                break;
-            }
-            else if (FIRE_ELEMENTAL_TOTEM > 0 && LastSpellElemental == 15 && ai->GetManaPercent() >= 23)
-            {
+               }*/
+            //else if (CHAIN_LIGHTNING > 0 && LastSpellElemental == 13 && ai->GetManaPercent() >= 33)
+            //{
+            //    ai->CastSpell(CHAIN_LIGHTNING, *pTarget);
+            //    SpellSequence = SPELL_ENHANCEMENT;
+            //    LastSpellElemental = LastSpellElemental + 1;
+            //    break;
+            //}
+            /*else if (FIRE_ELEMENTAL_TOTEM > 0 && LastSpellElemental == 15 && ai->GetManaPercent() >= 23)
+               {
                 ai->CastSpell(FIRE_ELEMENTAL_TOTEM);
                 SpellSequence = SPELL_ENHANCEMENT;
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
-            }
+               }*/
             /*else if (HEX > 0 && LastSpellElemental == 16 && (!pTarget->HasAura(HEX, EFFECT_INDEX_0)) && ai->GetManaPercent() >= 3)
                {
                 ai->CastSpell(HEX);
@@ -456,17 +540,6 @@ void PlayerbotShamanAI::DoNextCombatManeuver(Unit *pTarget)
                 LastSpellElemental = LastSpellElemental + 1;
                 break;
                }*/
-            else if (LastSpellElemental > 16)
-            {
-                LastSpellElemental = 1;
-                SpellSequence = SPELL_ENHANCEMENT;
-                break;
-            }
-            else
-            {
-                LastSpellElemental = LastSpellElemental + 1;
-                SpellSequence = SPELL_ENHANCEMENT;
-            }
     }
 } // end DoNextCombatManeuver
 
@@ -476,18 +549,10 @@ void PlayerbotShamanAI::DoNonCombatActions()
     Player * m_bot = GetPlayerBot();
     if (!m_bot)
         return;
+	
+	uint32 spec = m_bot->GetSpec();
 
-    SpellSequence = SPELL_ENHANCEMENT;
-
-    // buff master with EARTH_SHIELD
-    if (EARTH_SHIELD > 0)
-        (!GetMaster()->HasAura(EARTH_SHIELD, EFFECT_INDEX_0) && ai->CastSpell(EARTH_SHIELD, *(GetMaster())));
-
-    // buff myself with WATER_SHIELD, LIGHTNING_SHIELD
-    if (WATER_SHIELD > 0)
-        (!m_bot->HasAura(WATER_SHIELD, EFFECT_INDEX_0) && !m_bot->HasAura(LIGHTNING_SHIELD, EFFECT_INDEX_0) && ai->CastSpell(WATER_SHIELD, *m_bot));
-    else if (LIGHTNING_SHIELD > 0)
-        (!m_bot->HasAura(LIGHTNING_SHIELD, EFFECT_INDEX_0) && !m_bot->HasAura(WATER_SHIELD, EFFECT_INDEX_0) && ai->CastSpell(LIGHTNING_SHIELD, *m_bot));
+	CheckShields();
 /*
        // buff myself weapon
        if (ROCKBITER_WEAPON > 0)
@@ -501,6 +566,29 @@ void PlayerbotShamanAI::DoNonCombatActions()
        else if (FROSTBRAND_WEAPON > 0)
             (!m_bot->HasAura(FROSTBRAND_WEAPON, EFFECT_INDEX_0) && !m_bot->HasAura(EARTHLIVING_WEAPON, EFFECT_INDEX_0) && !m_bot->HasAura(WINDFURY_WEAPON, EFFECT_INDEX_0) && !m_bot->HasAura(FLAMETONGUE_WEAPON, EFFECT_INDEX_0) && !m_bot->HasAura(ROCKBITER_WEAPON, EFFECT_INDEX_0) && ai->CastSpell(FROSTBRAND_WEAPON,*m_bot) );
  */
+    // Mainhand
+    Item * weapon;
+    weapon = m_bot->GetItemByPos(EQUIPMENT_SLOT_MAINHAND);
+    if (weapon && (weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0) && spec == SHAMAN_SPEC_RESTORATION)
+    {
+		ai->CastSpell(EARTHLIVING_WEAPON, *m_bot);
+    }
+	else if (weapon && (weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0) && spec == SHAMAN_SPEC_ELEMENTAL)
+    {
+		ai->CastSpell(FLAMETONGUE_WEAPON, *m_bot);
+    }
+	else if (weapon && (weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0) && spec == SHAMAN_SPEC_ENHANCEMENT)
+    {
+		ai->CastSpell(WINDFURY_WEAPON, *m_bot);
+    }
+
+    //Offhand
+    weapon = m_bot->GetItemByPos(EQUIPMENT_SLOT_OFFHAND);
+    if (weapon && (weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0) && spec == SHAMAN_SPEC_ENHANCEMENT)
+    {
+		ai->CastSpell(FLAMETONGUE_WEAPON, *m_bot);
+    }
+
     // mana check
     if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
         m_bot->SetStandState(UNIT_STAND_STATE_STAND);
