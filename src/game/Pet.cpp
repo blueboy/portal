@@ -440,7 +440,6 @@ void Pet::SavePetToDB(PetSaveMode mode)
         savePet.Execute();
         CharacterDatabase.CommitTransaction();
     }
-    // delete
     else
     {
         RemoveAllAuras(AURA_REMOVE_BY_DELETE);
@@ -951,7 +950,7 @@ bool Pet::InitStatsForLevel(uint32 petlevel, Unit* owner)
 
     int32 createResistance[MAX_SPELL_SCHOOL] = {0,0,0,0,0,0,0};
 
-    if(cinfo && getPetType() != HUNTER_PET)
+    if(getPetType() != HUNTER_PET)
     {
         createResistance[SPELL_SCHOOL_HOLY]   = cinfo->resistance1;
         createResistance[SPELL_SCHOOL_FIRE]   = cinfo->resistance2;
@@ -1691,7 +1690,6 @@ bool Pet::removeSpell(uint32 spell_id, bool learn_prev, bool clear_ab)
 
     return true;
 }
-
 
 void Pet::CleanupActionBar()
 {

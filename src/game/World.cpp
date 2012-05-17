@@ -453,7 +453,7 @@ void World::LoadConfigSettings(bool reload)
     setConfigPos(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS, "Rate.Rage.Loss", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_INCOME, "Rate.RunicPower.Income", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_LOSS,"Rate.RunicPower.Loss",   1.0f);
-    setConfig(CONFIG_FLOAT_RATE_POWER_FOCUS,             "Rate.Focus",  1.0f);
+    setConfig(CONFIG_FLOAT_RATE_POWER_FOCUS,             "Rate.Focus", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_POWER_ENERGY,            "Rate.Energy", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_SKILL_DISCOVERY,      "Rate.Skill.Discovery",      1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_DROP_ITEM_POOR,       "Rate.Drop.Item.Poor",       1.0f);
@@ -1105,6 +1105,10 @@ void World::SetInitialWorldSettings()
     sLog.outString( ">>> Game Event Data loaded" );
     sLog.outString();
 
+    // Load Conditions
+    sLog.outString( "Loading Conditions..." );
+    sObjectMgr.LoadConditions();
+
     sLog.outString( "Creating map persistent states for non-instanceable maps..." );   // must be after PackInstances(), LoadCreatures(), sPoolMgr.LoadFromDB(), sGameEventMgr.LoadFromDB();
     sMapPersistentStateMgr.InitWorldMaps();
 
@@ -1185,8 +1189,8 @@ void World::SetInitialWorldSettings()
     sLog.outString( "Loading Skill Fishing base level requirements..." );
     sObjectMgr.LoadFishingBaseSkillLevel();
 
-    sLog.outString( "Loading Achievements..." );
     sLog.outString();
+    sLog.outString( "Loading Achievements..." );
     sAchievementMgr.LoadAchievementReferenceList();
     sAchievementMgr.LoadAchievementCriteriaList();
     sAchievementMgr.LoadAchievementCriteriaRequirements();
@@ -1281,6 +1285,7 @@ void World::SetInitialWorldSettings()
     sScriptMgr.LoadQuestEndScripts();                           // must be after load Creature/Gameobject(Template/Data) and QuestTemplate
     sScriptMgr.LoadSpellScripts();                              // must be after load Creature/Gameobject(Template/Data)
     sScriptMgr.LoadGameObjectScripts();                         // must be after load Creature/Gameobject(Template/Data)
+    sScriptMgr.LoadGameObjectTemplateScripts();                 // must be after load Creature/Gameobject(Template/Data)
     sScriptMgr.LoadEventScripts();                              // must be after load Creature/Gameobject(Template/Data)
     sLog.outString( ">>> Scripts loaded" );
     sLog.outString();

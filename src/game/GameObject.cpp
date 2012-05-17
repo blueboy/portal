@@ -356,7 +356,7 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
                         ResetDoorOrButton();
                     break;
                 case GAMEOBJECT_TYPE_CHEST:
-                    if (m_groupLootTimer)
+                    if (m_groupLootId)
                     {
                         if (m_groupLootTimer <= update_diff)
                             StopGroupLoot();
@@ -401,10 +401,11 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
                 //any return here in case battleground traps
             }
 
-            if (GetOwnerGuid())
+            if (!HasStaticDBSpawnData())                    // Remove wild summoned after use
             {
-                if (Unit* owner = GetOwner())
-                    owner->RemoveGameObject(this, false);
+                if (GetOwnerGuid())
+                    if (Unit* owner = GetOwner())
+                        owner->RemoveGameObject(this, false);
 
                 SetRespawnTime(0);
                 Delete();
@@ -960,6 +961,8 @@ void GameObject::Use(Unit* user)
     }
 
     bool scriptReturnValue = user->GetTypeId() == TYPEID_PLAYER && sScriptMgr.OnGameObjectUse((Player*)user, this);
+    if (!scriptReturnValue)
+        GetMap()->ScriptsStart(sGameObjectTemplateScripts, GetEntry(), spellCaster, this);
 
     switch (GetGoType())
     {
@@ -1169,7 +1172,6 @@ void GameObject::Use(Unit* user)
                 }
 
                 player->RewardPlayerAndGroupAtCast(this);
-
             }
 
             if (scriptReturnValue)
@@ -1510,11 +1512,8 @@ void GameObject::Use(Unit* user)
                     switch(info->id)
                     {
                         case 179785:                        // Silverwing Flag
-                            // check if it's correct bg
-                            if (bg->GetTypeID() == BATTLEGROUND_WS)
-                                bg->EventPlayerClickedOnFlag(player, this);
-                            break;
                         case 179786:                        // Warsong Flag
+                            // check if it's correct bg
                             if (bg->GetTypeID() == BATTLEGROUND_WS)
                                 bg->EventPlayerClickedOnFlag(player, this);
                             break;

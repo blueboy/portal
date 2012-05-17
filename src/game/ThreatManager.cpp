@@ -38,7 +38,7 @@ float ThreatCalcHelper::CalcThreat(Unit* pHatedUnit, Unit* /*pHatingUnit*/, floa
 
     if (pThreatSpell)
     {
-        if (pThreatSpell->AttributesEx & SPELL_ATTR_EX_NO_THREAT)
+        if (pThreatSpell->HasAttribute(SPELL_ATTR_EX_NO_THREAT))
             return 0.0f;
 
         if (Player* modOwner = pHatedUnit->GetSpellModOwner())
@@ -295,7 +295,7 @@ HostileReference* ThreatContainer::selectNextVictim(Creature* pAttacker, Hostile
     bool checkedCurrentVictim = false;
 
     ThreatList::const_iterator lastRef = iThreatList.end();
-    lastRef--;
+    --lastRef;
 
     for (ThreatList::const_iterator iter = iThreatList.begin(); iter != iThreatList.end() && !found;)
     {

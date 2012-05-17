@@ -815,7 +815,7 @@ struct CalcDamageInfo
     uint32 blocked_amount;
     uint32 HitInfo;
     uint32 TargetState;
-// Helper
+    // Helper
     WeaponAttackType attackType; //
     uint32 procAttacker;
     uint32 procVictim;
@@ -1088,7 +1088,6 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         typedef std::set<uint32> ComboPointHolderSet;
         typedef std::map<uint8, uint32> VisibleAuraMap;
         typedef std::map<SpellEntry const*, ObjectGuid> SingleCastSpellTargetMap;
-
 
         virtual ~Unit ( );
 
@@ -1752,6 +1751,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         GameObject* GetGameObject(uint32 spellId) const;
         void AddGameObject(GameObject* gameObj);
+        void AddWildGameObject(GameObject* gameObj);
         void RemoveGameObject(GameObject* gameObj, bool del);
         void RemoveGameObject(uint32 spellid, bool del);
         void RemoveAllGameObjects();
@@ -1845,7 +1845,6 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         float GetSpeedRate( UnitMoveType mtype ) const { return m_speed_rate[mtype]; }
         void SetSpeedRate(UnitMoveType mtype, float rate, bool forced = false);
 
-        void SetHover(bool on);
         bool isHover() const { return HasAuraType(SPELL_AURA_HOVER); }
 
         void KnockBackFrom(Unit* target, float horizontalSpeed, float verticalSpeed);
@@ -1938,6 +1937,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         typedef std::list<GameObject*> GameObjectList;
         GameObjectList m_gameObj;
+        typedef std::map<uint32, ObjectGuid> WildGameObjectMap;
+        WildGameObjectMap m_wildGameObjs;
         bool m_isSorted;
         uint32 m_transform;
 

@@ -185,7 +185,7 @@ bool changeGuid(std::string &str, int n, std::map<uint32, uint32> &guidMap, uint
         return true;                                        // not an error
 
     uint32 newGuid = registerNewGuid(oldGuid, guidMap, hiGuid);
-    snprintf(chritem, 20, "%d", newGuid);
+    snprintf(chritem, 20, "%u", newGuid);
 
     return changenth(str, n, chritem, false, nonzero);
 }
@@ -198,7 +198,7 @@ bool changetokGuid(std::string &str, int n, std::map<uint32, uint32> &guidMap, u
         return true;                                        // not an error
 
     uint32 newGuid = registerNewGuid(oldGuid, guidMap, hiGuid);
-    snprintf(chritem, 20, "%d", newGuid);
+    snprintf(chritem, 20, "%u", newGuid);
 
     return changetoknth(str, n, chritem, false, nonzero);
 }
@@ -453,9 +453,9 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
 
     // name encoded or empty
 
-    snprintf(newguid, 20, "%d", guid);
-    snprintf(chraccount, 20, "%d", account);
-    snprintf(newpetid, 20, "%d", sObjectMgr.GeneratePetNumber());
+    snprintf(newguid, 20, "%u", guid);
+    snprintf(chraccount, 20, "%u", account);
+    snprintf(newpetid, 20, "%u", sObjectMgr.GeneratePetNumber());
     snprintf(lastpetid, 20, "%s", "");
 
     std::map<uint32,uint32> items;
@@ -702,6 +702,7 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
                 break;
             }
             case DTT_EQSET_TABLE:
+            {
                 if (!changenth(line, 1, newguid))           // character_equipmentsets.guid update
                     ROLLBACK(DUMP_FILE_BROKEN);
                 if (!changeGuid(line, 2, eqsets, sObjectMgr.m_EquipmentSetIds.GetNextAfterMaxUsed()))
@@ -710,7 +711,7 @@ DumpReturn PlayerDumpReader::LoadDump(const std::string& file, uint32 account, s
                     if(!changeGuid(line, 6+i, items, sObjectMgr.m_ItemGuids.GetNextAfterMaxUsed()))
                         ROLLBACK(DUMP_FILE_BROKEN);
                 break;
-
+            }
             default:
                 sLog.outError("Unknown dump table type: %u",type);
                 break;

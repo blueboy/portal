@@ -78,7 +78,7 @@ Player* ObjectAccessor::FindPlayer(ObjectGuid guid, bool inWorld /*= true*/)
     if (!guid)
         return NULL;
 
-    Player* plr = HashMapHolder<Player>::Find(guid);;
+    Player* plr = HashMapHolder<Player>::Find(guid);
     if (!plr || (!plr->IsInWorld() && inWorld))
         return NULL;
 
@@ -107,7 +107,7 @@ ObjectAccessor::SaveAllPlayers()
 
 void ObjectAccessor::KickPlayer(ObjectGuid guid)
 {
-    if (Player* p = HashMapHolder<Player>::Find(guid))
+    if (Player* p = ObjectAccessor::FindPlayer(guid, false))
     {
         WorldSession* s = p->GetSession();
         s->KickPlayer();                            // mark session to remove at next session list update
@@ -207,7 +207,7 @@ ObjectAccessor::ConvertCorpseForPlayer(ObjectGuid player_guid, bool insignia)
     // remove resurrectable corpse from grid object registry (loaded state checked into call)
     // do not load the map if it's not loaded
     Map *map = sMapMgr.FindMap(corpse->GetMapId(), corpse->GetInstanceId());
-    if(map)
+    if (map)
         map->Remove(corpse, false);
 
     // remove corpse from DB

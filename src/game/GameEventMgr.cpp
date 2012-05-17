@@ -132,7 +132,7 @@ void GameEventMgr::LoadFromDB()
             uint16 event_id = fields[0].GetUInt16();
             if (event_id == 0)
             {
-                sLog.outErrorDb("`game_event` game event id (%i) is reserved and can't be used.",event_id);
+                sLog.outErrorDb("`game_event` game event id (%i) is reserved and can't be used.", event_id);
                 continue;
             }
 
@@ -145,18 +145,23 @@ void GameEventMgr::LoadFromDB()
             pGameEvent.length       = fields[4].GetUInt32();
             pGameEvent.holiday_id   = HolidayIds(fields[5].GetUInt32());
 
-
-            if(pGameEvent.length==0)                            // length>0 is validity check
+            if (pGameEvent.length == 0)                     // length>0 is validity check
             {
-                sLog.outErrorDb("`game_event` game event id (%i) have length 0 and can't be used.",event_id);
+                sLog.outErrorDb("`game_event` game event id (%i) have length 0 and can't be used.", event_id);
                 continue;
             }
 
-            if(pGameEvent.holiday_id != HOLIDAY_NONE)
+            if (pGameEvent.occurence < pGameEvent.length)   // occurence < length is useless. This also asserts that occurence > 0!
             {
-                if(!sHolidaysStore.LookupEntry(pGameEvent.holiday_id))
+                sLog.outErrorDb("`game_event` game event id (%i) has occurence %u  < length %u and can't be used.", event_id, pGameEvent.occurence, pGameEvent.length);
+                continue;
+            }
+
+            if (pGameEvent.holiday_id != HOLIDAY_NONE)
+            {
+                if (!sHolidaysStore.LookupEntry(pGameEvent.holiday_id))
                 {
-                    sLog.outErrorDb("`game_event` game event id (%i) have nonexistent holiday id %u.",event_id,pGameEvent.holiday_id);
+                    sLog.outErrorDb("`game_event` game event id (%i) have nonexistent holiday id %u.", event_id, pGameEvent.holiday_id);
                     pGameEvent.holiday_id = HOLIDAY_NONE;
                 }
             }
@@ -167,7 +172,7 @@ void GameEventMgr::LoadFromDB()
         delete result;
 
         sLog.outString();
-        sLog.outString( ">> Loaded %u game events", count );
+        sLog.outString(">> Loaded %u game events", count);
     }
 
     std::map<uint16,int16> pool2event;                      // for check unique spawn event associated with pool

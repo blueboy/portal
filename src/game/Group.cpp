@@ -151,6 +151,7 @@ bool Group::Create(ObjectGuid guid, const char * name)
         CharacterDatabase.BeginTransaction();
         CharacterDatabase.PExecute("DELETE FROM groups WHERE groupId ='%u'", m_Id);
         CharacterDatabase.PExecute("DELETE FROM group_member WHERE groupId ='%u'", m_Id);
+
         CharacterDatabase.PExecute("INSERT INTO groups (groupId,leaderGuid,mainTank,mainAssistant,lootMethod,looterGuid,lootThreshold,icon1,icon2,icon3,icon4,icon5,icon6,icon7,icon8,groupType,difficulty,raiddifficulty) "
             "VALUES ('%u','%u','%u','%u','%u','%u','%u','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','%u','%u','%u')",
             m_Id, m_leaderGuid.GetCounter(), m_mainTankGuid.GetCounter(), m_mainAssistantGuid.GetCounter(), uint32(m_lootMethod),
@@ -615,7 +616,7 @@ void Group::GroupLoot(WorldObject* pSource, Loot* loot)
 
         //roll for over-threshold item if it's one-player loot
         if (itemProto->Quality >= uint32(m_lootThreshold) && !lootItem.freeforall)
-            StartLootRool(pSource, GROUP_LOOT, loot, itemSlot, maxEnchantingSkill);
+            StartLootRoll(pSource, GROUP_LOOT, loot, itemSlot, maxEnchantingSkill);
         else
             lootItem.is_underthreshold = 1;
     }
@@ -637,7 +638,7 @@ void Group::NeedBeforeGreed(WorldObject* pSource, Loot* loot)
 
         //only roll for one-player items, not for ones everyone can get
         if (itemProto->Quality >= uint32(m_lootThreshold) && !lootItem.freeforall)
-            StartLootRool(pSource, NEED_BEFORE_GREED, loot, itemSlot, maxEnchantingSkill);
+            StartLootRoll(pSource, NEED_BEFORE_GREED, loot, itemSlot, maxEnchantingSkill);
         else
             lootItem.is_underthreshold = 1;
     }
@@ -757,25 +758,25 @@ bool Group::CountRollVote(ObjectGuid const& playerGUID, Rolls::iterator& rollI, 
     return false;
 }
 
-void Group::StartLootRool(WorldObject* lootTarget, LootMethod method, Loot* loot, uint8 itemSlot, uint32 maxEnchantingSkill)
+void Group::StartLootRoll(WorldObject* lootTarget, LootMethod method, Loot* loot, uint8 itemSlot, uint32 maxEnchantingSkill)
 {
     if (itemSlot >= loot->items.size())
         return;
 
-    LootItem const& lootItem =  loot->items[itemSlot];
+    LootItem const& lootItem = loot->items[itemSlot];
 
     Roll* r = new Roll(lootTarget->GetObjectGuid(), method, lootItem);
 
     //a vector is filled with only near party members
-    for(GroupReference *itr = GetFirstMember(); itr != NULL; itr = itr->next())
+    for (GroupReference* itr = GetFirstMember(); itr != NULL; itr = itr->next())
     {
-        Player *playerToRoll = itr->getSource();
-        if(!playerToRoll || !playerToRoll->GetSession())
+        Player* playerToRoll = itr->getSource();
+        if (!playerToRoll || !playerToRoll->GetSession())
             continue;
 
         if (lootItem.AllowedForPlayer(playerToRoll))
         {
-            if (playerToRoll->IsWithinDist(lootTarget, sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE), false))
+            if (playerToRoll->IsWithinDistInMap(lootTarget, sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE), false))
             {
                 r->playerVote[playerToRoll->GetObjectGuid()] = ROLL_NOT_EMITED_YET;
                 ++r->totalPlayersRolling;
@@ -1691,7 +1692,7 @@ bool Group::InCombatToInstance(uint32 instanceId)
     return false;
 }
 
-bool Group::SetPlayerMap(const ObjectGuid guid, uint32 mapid)
+bool Group::SetPlayerMap(ObjectGuid guid, uint32 mapid)
 {
     member_witerator slot = _getMemberWSlot(guid);
     if (slot != m_memberSlots.end())

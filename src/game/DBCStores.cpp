@@ -338,7 +338,7 @@ inline void LoadDBC(LocalData& localeData, BarGoLink& bar, StoreProblemList& err
         if(f)
         {
             char buf[100];
-            snprintf(buf,100," (exist, but have %d fields instead " SIZEFMTD ") Wrong client version DBC file?",storage.GetFieldCount(),strlen(storage.GetFormat()));
+            snprintf(buf, 100, " (exist, but have %u fields instead " SIZEFMTD ") Wrong client version DBC file?", storage.GetFieldCount(), strlen(storage.GetFormat()));
             errlist.push_back(dbc_filename + buf);
             fclose(f);
         }
@@ -506,8 +506,7 @@ void LoadDBCStores(const std::string& dataPath)
             continue;
 
         SpellEntry const* spellInfo = sSpellStore.LookupEntry(skillLine->spellId);
-
-        if(spellInfo && (spellInfo->Attributes & 0x1D0) == 0x1D0)
+        if (spellInfo && (spellInfo->Attributes & (SPELL_ATTR_UNK4 | SPELL_ATTR_PASSIVE | SPELL_ATTR_UNK7 | SPELL_ATTR_UNK8)) == (SPELL_ATTR_UNK4 | SPELL_ATTR_PASSIVE | SPELL_ATTR_UNK7 | SPELL_ATTR_UNK8))
         {
             for (unsigned int i = 1; i < sCreatureFamilyStore.GetNumRows(); ++i)
             {

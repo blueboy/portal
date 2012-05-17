@@ -959,7 +959,7 @@ void WorldObject::Relocate(float x, float y, float z, float orientation)
     m_position.z = z;
     m_position.o = orientation;
 
-    if(isType(TYPEMASK_UNIT))
+    if (isType(TYPEMASK_UNIT))
         ((Unit*)this)->m_movementInfo.ChangePosition(x, y, z, orientation);
 }
 
@@ -969,7 +969,7 @@ void WorldObject::Relocate(float x, float y, float z)
     m_position.y = y;
     m_position.z = z;
 
-    if(isType(TYPEMASK_UNIT))
+    if (isType(TYPEMASK_UNIT))
         ((Unit*)this)->m_movementInfo.ChangePosition(x, y, z, GetOrientation());
 }
 
@@ -977,7 +977,7 @@ void WorldObject::SetOrientation(float orientation)
 {
     m_position.o = orientation;
 
-    if(isType(TYPEMASK_UNIT))
+    if (isType(TYPEMASK_UNIT))
         ((Unit*)this)->m_movementInfo.ChangeOrientation(orientation);
 }
 
@@ -1199,8 +1199,13 @@ float WorldObject::GetAngle(const WorldObject* obj) const
     if (!obj)
         return 0.0f;
 
-    MANGOS_ASSERT(obj != this || PrintEntryError("GetAngle (for self)"));
-
+    // Rework the assert, when more cases where such a call can happen have been fixed
+    //MANGOS_ASSERT(obj != this || PrintEntryError("GetAngle (for self)"));
+    if (obj == this)
+    {
+        sLog.outError("INVALID CALL for GetAngle for %s", obj->GetGuidStr().c_str());
+        return 0.0f;
+    }
     return GetAngle(obj->GetPositionX(), obj->GetPositionY());
 }
 
@@ -1520,11 +1525,11 @@ void WorldObject::SendObjectDeSpawnAnim(ObjectGuid guid)
     SendMessageToSet(&data, true);
 }
 
-void WorldObject::SendGameObjectCustomAnim(ObjectGuid guid)
+void WorldObject::SendGameObjectCustomAnim(ObjectGuid guid, uint32 animId /*= 0*/)
 {
     WorldPacket data(SMSG_GAMEOBJECT_CUSTOM_ANIM, 8+4);
     data << ObjectGuid(guid);
-    data << uint32(0);                                      // not known what this is
+    data << uint32(animId);
     SendMessageToSet(&data, true);
 }
 
