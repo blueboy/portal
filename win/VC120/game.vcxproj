@@ -456,6 +456,7 @@
     <ClCompile Include="..\..\src\game\Player.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotClassAI.cpp" />
+    <ClCompile Include="..\..\src\game\playerbot\PlayerbotDeathKnightAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotDruidAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotHunterAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotMageAI.cpp" />
@@ -466,7 +467,6 @@
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotShamanAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotWarlockAI.cpp" />
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotWarriorAI.cpp" />
-    <ClCompile Include="..\..\src\game\playerbot\PlayerbotDeathKnightAI.cpp" />
     <ClCompile Include="..\..\src\game\PlayerDump.cpp" />
     <ClCompile Include="..\..\src\game\PointMovementGenerator.cpp" />
     <ClCompile Include="..\..\src\game\PoolManager.cpp" />

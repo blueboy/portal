@@ -463,6 +463,9 @@
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotClassAI.cpp">
       <Filter>World/Handlers</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\game\playerbot\PlayerbotDeathKnightAI.cpp">
+      <Filter>World/Handlers</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotDruidAI.cpp">
       <Filter>World/Handlers</Filter>
     </ClCompile>
@@ -491,9 +494,6 @@
       <Filter>World/Handlers</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\game\playerbot\PlayerbotWarriorAI.cpp">
-      <Filter>World/Handlers</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\game\playerbot\PlayerbotDeathKnightAI.cpp">
       <Filter>World/Handlers</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\game\AuctionHouseBot\AuctionHouseBot.cpp">
