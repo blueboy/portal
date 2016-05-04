@@ -117,7 +117,7 @@ namespace VMAP
     }
 
     StaticMapTree::StaticMapTree(uint32 mapID, const std::string& basePath):
-        iMapID(mapID), iTreeValues(0), iBasePath(basePath)
+        iMapID(mapID), iIsTiled(false), iTreeValues(nullptr), iNTreeValues(0), iBasePath(basePath)
     {
         if (iBasePath.length() > 0 && (iBasePath[iBasePath.length() - 1] != '/' && iBasePath[iBasePath.length() - 1] != '\\'))
             iBasePath.append("/");
@@ -170,7 +170,6 @@ namespace VMAP
 
     bool StaticMapTree::getObjectHitPos(const Vector3& pPos1, const Vector3& pPos2, Vector3& pResultHitPos, float pModifyDist) const
     {
-        bool result = false;
         float maxDist = (pPos2 - pPos1).magnitude();
         // valid map coords should *never ever* produce float overflow, but this would produce NaNs too:
         MANGOS_ASSERT(maxDist < std::numeric_limits<float>::max());
@@ -201,14 +200,10 @@ namespace VMAP
             {
                 pResultHitPos = pResultHitPos + dir * pModifyDist;
             }
-            result = true;
+            return true;
         }
-        else
-        {
-            pResultHitPos = pPos2;
-            result = false;
-        }
-        return result;
+        pResultHitPos = pPos2;
+        return false;
     }
 
     //=========================================================
@@ -280,7 +275,7 @@ namespace VMAP
             if (!readChunk(rf, chunk, VMAP_MAGIC, 8)) success = false;
             char tiled;
             if (success && fread(&tiled, sizeof(char), 1, rf) != 1) success = false;
-            iIsTiled = bool(tiled);
+            iIsTiled = !!tiled;
             // Nodes
             if (success && !readChunk(rf, chunk, "NODE", 4)) success = false;
             if (success) success = iTree.readFromFile(rf);

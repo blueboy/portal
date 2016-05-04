@@ -76,6 +76,16 @@ set(SRC_GRP_LOG
     Log.h
 )
 
+set(SRC_GRP_NETWORK
+    Network/NetworkThread.cpp
+    Network/PacketBuffer.cpp
+    Network/Socket.cpp
+    Network/Listener.hpp
+    Network/NetworkThread.hpp
+    Network/PacketBuffer.hpp
+    Network/Socket.hpp
+)
+
 set(SRC_GRP_UTIL
     ByteBuffer.cpp
     ByteBuffer.h
@@ -97,9 +107,9 @@ set(LIBRARY_SRCS
     ${SRC_GRP_DATABASE_DBC}
     ${SRC_GRP_LOG}
     ${SRC_GRP_UTIL}
+    ${SRC_GRP_NETWORK}
     Common.cpp
     Common.h
-    LockedQueue.h
     revision_sql.h
     Threading.cpp
     Threading.h
@@ -156,7 +166,6 @@ endif()
 # include external dependencies without warnings
 include_directories(SYSTEM
   ${CMAKE_SOURCE_DIR}/dep/include
-  ${ACE_INCLUDE_DIR}
 )
 
 include_directories(
@@ -182,6 +191,3 @@ if(POSTGRESQL)
 endif()
 
 add_dependencies(${LIBRARY_NAME} revision.h)
-if(NOT ACE_USE_EXTERNAL)
-  add_dependencies(${LIBRARY_NAME} ACE_Project)
-endif()

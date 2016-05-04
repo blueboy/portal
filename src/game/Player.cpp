@@ -40,7 +40,6 @@
 #include "CellImpl.h"
 #include "ObjectMgr.h"
 #include "ObjectAccessor.h"
-#include "CreatureAI.h"
 #include "Formulas.h"
 #include "Group.h"
 #include "Guild.h"
@@ -401,7 +400,7 @@ UpdateMask Player::updateVisualBits;
 
 Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_achievementMgr(this), m_reputationMgr(this)
 {
-    m_transport = 0;
+    m_transport = nullptr;
 
     // Playerbot mod:
     m_playerbotAI = 0;
@@ -447,7 +446,7 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     // this must help in case next save after mass player load after server startup
     m_nextSave = urand(m_nextSave / 2, m_nextSave * 3 / 2);
 
-    clearResurrectRequestData();
+    ClearResurrectRequestData();
 
     memset(m_items, 0, sizeof(Item*)*PLAYER_SLOTS_COUNT);
 
@@ -586,6 +585,8 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     m_lastFallZ = 0;
 
     m_cachedGS = 0;
+
+    m_isGhouled = false;
 }
 
 Player::~Player()
@@ -1034,7 +1035,6 @@ int32 Player::getMaxTimer(MirrorTimerType timer)
         default:
             return 0;
     }
-    return 0;
 }
 
 void Player::UpdateMirrorTimers()
@@ -1466,7 +1466,7 @@ void Player::SetDeathState(DeathState s)
         // lost combo points at any target (targeted combo points clear in Unit::SetDeathState)
         ClearComboPoints();
 
-        clearResurrectRequestData();
+        ClearResurrectRequestData();
 
         // remove form before other mods to prevent incorrect stats calculation
         RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
@@ -2813,10 +2813,10 @@ void Player::SendInitialSpells()
 
     uint16 spellCount = 0;
 
-    WorldPacket data(SMSG_INITIAL_SPELLS, (1 + 2 + 4 * m_spells.size() + 2 + m_spellCooldowns.size() * (2 + 2 + 2 + 4 + 4)));
+    WorldPacket data(SMSG_INITIAL_SPELLS, (1 + 2 + 6 * m_spells.size() + 2 + m_spellCooldowns.size() * (2 + 2 + 2 + 4 + 4)));
     data << uint8(0);
 
-    size_t countPos = data.wpos();
+    const size_t countPos = data.wpos();
     data << uint16(spellCount);                             // spell count placeholder
 
     for (PlayerSpellMap::const_iterator itr = m_spells.begin(); itr != m_spells.end(); ++itr)
@@ -2837,8 +2837,7 @@ void Player::SendInitialSpells()
 
     data.put<uint16>(countPos, spellCount);                 // write real count value
 
-    uint16 spellCooldowns = m_spellCooldowns.size();
-    data << uint16(spellCooldowns);
+    data << uint16(m_spellCooldowns.size());
     for (SpellCooldowns::const_iterator itr = m_spellCooldowns.begin(); itr != m_spellCooldowns.end(); ++itr)
     {
         SpellEntry const* sEntry = sSpellStore.LookupEntry(itr->first);
@@ -3549,18 +3548,18 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
             PlayerSpellMap::iterator prev_itr = m_spells.find(prev_id);
             if (prev_itr != m_spells.end())
             {
-                PlayerSpell& playerSpell = prev_itr->second;
-                if (playerSpell.dependent != cur_dependent)
+                PlayerSpell& spell = prev_itr->second;
+                if (spell.dependent != cur_dependent)
                 {
-                    playerSpell.dependent = cur_dependent;
-                    if (playerSpell.state != PLAYERSPELL_NEW)
-                        playerSpell.state = PLAYERSPELL_CHANGED;
+                    spell.dependent = cur_dependent;
+                    if (spell.state != PLAYERSPELL_NEW)
+                        spell.state = PLAYERSPELL_CHANGED;
                 }
 
                 // now re-learn if need re-activate
-                if (cur_active && !playerSpell.active && learn_low_rank)
+                if (cur_active && !spell.active && learn_low_rank)
                 {
-                    if (addSpell(prev_id, true, false, playerSpell.dependent, playerSpell.disabled))
+                    if (addSpell(prev_id, true, false, spell.dependent, spell.disabled))
                     {
                         // downgrade spell ranks in spellbook and action bar
                         WorldPacket data(SMSG_SUPERCEDED_SPELL, 4 + 4);
@@ -3777,7 +3776,7 @@ bool Player::resetTalents(bool no_cost, bool all_specs)
 
         if (GetMoney() < cost)
         {
-            SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, 0, 0, 0);
+            SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, nullptr, 0, 0);
             return false;
         }
     }
@@ -4419,7 +4418,7 @@ void Player::DeleteOldCharacters(uint32 keepDays)
 void Player::SetRoot(bool enable)
 {
     WorldPacket data(enable ? SMSG_FORCE_MOVE_ROOT : SMSG_FORCE_MOVE_UNROOT, GetPackGUID().size() + 4);
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 }
@@ -4427,7 +4426,7 @@ void Player::SetRoot(bool enable)
 void Player::SetWaterWalk(bool enable)
 {
     WorldPacket data(enable ? SMSG_MOVE_WATER_WALK : SMSG_MOVE_LAND_WALK, GetPackGUID().size() + 4);
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);
     GetSession()->SendPacket(&data);
 }
@@ -4440,12 +4439,12 @@ void Player::SetLevitate(bool enable)
     else
         data.Initialize(SMSG_MOVE_GRAVITY_ENABLE, 12);
 
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);                                      // unk
     SendMessageToSet(&data, true);
 
     data.Initialize(MSG_MOVE_GRAVITY_CHNG, 64);
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     m_movementInfo.Write(data);
     SendMessageToSet(&data, false);
 }
@@ -4458,12 +4457,12 @@ void Player::SetCanFly(bool enable)
     else
         data.Initialize(SMSG_MOVE_UNSET_CAN_FLY, 12);
 
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);                                      // unk
     SendMessageToSet(&data, true);
 
     data.Initialize(MSG_MOVE_UPDATE_CAN_FLY, 64);
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     m_movementInfo.Write(data);
     SendMessageToSet(&data, false);
 }
@@ -4476,7 +4475,7 @@ void Player::SetFeatherFall(bool enable)
     else
         data.Initialize(SMSG_MOVE_NORMAL_FALL, 8 + 4);
 
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 
@@ -4493,7 +4492,7 @@ void Player::SetHover(bool enable)
     else
         data.Initialize(SMSG_MOVE_UNSET_HOVER, 8 + 4);
 
-    data << GetPackGUID();
+    data << GetMover()->GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 }
@@ -4955,7 +4954,7 @@ void Player::RepopAtGraveyard()
         SpawnCorpseBones();
     }
 
-    WorldSafeLocsEntry const* ClosestGrave = nullptr;
+    WorldSafeLocsEntry const* ClosestGrave;
 
     // Special handle for battleground maps
     if (BattleGround* bg = GetBattleGround())
@@ -5089,7 +5088,7 @@ void Player::HandleBaseModValue(BaseModGroup modGroup, BaseModType modType, floa
         return;
     }
 
-    float val = 1.0f;
+    float val;
 
     switch (modType)
     {
@@ -6368,7 +6367,7 @@ void Player::CheckAreaExploreAndOutdoor()
             else
             {
                 int32 diff = int32(getLevel()) - p->area_level;
-                uint32 XP = 0;
+                uint32 XP;
                 if (diff < -5)
                 {
                     XP = uint32(sObjectMgr.GetBaseXP(getLevel() + 5) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
@@ -6695,7 +6694,6 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, float honor)
                 return false;
 
             float f = 1;                                    // need for total kills (?? need more info)
-            uint32 k_grey = 0;
             uint32 k_level = getLevel();
             uint32 v_level = pVictim->getLevel();
 
@@ -6722,7 +6720,7 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, float honor)
                     victim_guid.Clear();                    // Don't show HK: <rank> message, only log.
             }
 
-            k_grey = MaNGOS::XP::GetGrayLevel(k_level);
+            uint32 k_grey = MaNGOS::XP::GetGrayLevel(k_level);
 
             if (v_level <= k_grey)
                 return false;
@@ -7003,7 +7001,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
     else                                                    // in friendly area
     {
         if (IsPvP() && !HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_IN_PVP) && pvpInfo.endTimer == 0)
-            pvpInfo.endTimer = time(0);                     // start toggle-off
+            pvpInfo.endTimer = time(nullptr);               // start toggle-off
     }
 
     if (zone->flags & AREA_FLAG_SANCTUARY)                  // in sanctuary
@@ -7216,8 +7214,8 @@ void Player::_ApplyItemBonuses(ItemPrototype const* proto, uint8 slot, bool appl
 
     for (uint32 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
     {
-        uint32 statType = 0;
-        int32  val = 0;
+        uint32 statType;
+        int32 val;
         // If set ScalingStatDistribution need get stats and values from it
         if (ssd && ssv)
         {
@@ -7533,7 +7531,7 @@ void Player::_ApplyWeaponDependentAuraCritMod(Item* item, WeaponAttackType attac
     if (aura->GetSpellProto()->EquippedItemClass == -1)
         return;
 
-    BaseModGroup mod = BASEMOD_END;
+    BaseModGroup mod;
     switch (attackType)
     {
         case BASE_ATTACK:   mod = CRIT_PERCENTAGE;        break;
@@ -7559,7 +7557,7 @@ void Player::_ApplyWeaponDependentAuraDamageMod(Item* item, WeaponAttackType att
     if (aura->GetSpellProto()->EquippedItemClass == -1)
         return;
 
-    UnitMods unitMod = UNIT_MOD_END;
+    UnitMods unitMod;
     switch (attackType)
     {
         case BASE_ATTACK:   unitMod = UNIT_MOD_DAMAGE_MAINHAND; break;
@@ -7568,7 +7566,7 @@ void Player::_ApplyWeaponDependentAuraDamageMod(Item* item, WeaponAttackType att
         default: return;
     }
 
-    UnitModifierType unitModType = TOTAL_VALUE;
+    UnitModifierType unitModType;
     switch (modifier->m_auraname)
     {
         case SPELL_AURA_MOD_DAMAGE_DONE:         unitModType = TOTAL_VALUE; break;
@@ -7901,7 +7899,7 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType)
                 else
                 {
                     // Deadly Poison, unique effect needs to be handled before casting triggered spell
-                    if (spellInfo->SpellFamilyName == SPELLFAMILY_ROGUE && spellInfo->SpellFamilyFlags & UI64LIT(0x10000))
+                    if (spellInfo->SpellFamilyName == SPELLFAMILY_ROGUE && spellInfo->SpellFamilyFlags & uint64(0x10000))
                         _HandleDeadlyPoison(Target, attType, spellInfo);
 
                     CastSpell(Target, spellInfo->Id, true, item);
@@ -8408,133 +8406,12 @@ void Player::SetSheath(SheathState sheathed)
 
 uint8 Player::FindEquipSlot(ItemPrototype const* proto, uint32 slot, bool swap) const
 {
-    uint8 pClass = getClass();
-
     uint8 slots[4];
-    slots[0] = NULL_SLOT;
-    slots[1] = NULL_SLOT;
-    slots[2] = NULL_SLOT;
-    slots[3] = NULL_SLOT;
-    switch (proto->InventoryType)
-    {
-        case INVTYPE_HEAD:
-            slots[0] = EQUIPMENT_SLOT_HEAD;
-            break;
-        case INVTYPE_NECK:
-            slots[0] = EQUIPMENT_SLOT_NECK;
-            break;
-        case INVTYPE_SHOULDERS:
-            slots[0] = EQUIPMENT_SLOT_SHOULDERS;
-            break;
-        case INVTYPE_BODY:
-            slots[0] = EQUIPMENT_SLOT_BODY;
-            break;
-        case INVTYPE_CHEST:
-            slots[0] = EQUIPMENT_SLOT_CHEST;
-            break;
-        case INVTYPE_ROBE:
-            slots[0] = EQUIPMENT_SLOT_CHEST;
-            break;
-        case INVTYPE_WAIST:
-            slots[0] = EQUIPMENT_SLOT_WAIST;
-            break;
-        case INVTYPE_LEGS:
-            slots[0] = EQUIPMENT_SLOT_LEGS;
-            break;
-        case INVTYPE_FEET:
-            slots[0] = EQUIPMENT_SLOT_FEET;
-            break;
-        case INVTYPE_WRISTS:
-            slots[0] = EQUIPMENT_SLOT_WRISTS;
-            break;
-        case INVTYPE_HANDS:
-            slots[0] = EQUIPMENT_SLOT_HANDS;
-            break;
-        case INVTYPE_FINGER:
-            slots[0] = EQUIPMENT_SLOT_FINGER1;
-            slots[1] = EQUIPMENT_SLOT_FINGER2;
-            break;
-        case INVTYPE_TRINKET:
-            slots[0] = EQUIPMENT_SLOT_TRINKET1;
-            slots[1] = EQUIPMENT_SLOT_TRINKET2;
-            break;
-        case INVTYPE_CLOAK:
-            slots[0] =  EQUIPMENT_SLOT_BACK;
-            break;
-        case INVTYPE_WEAPON:
-        {
-            slots[0] = EQUIPMENT_SLOT_MAINHAND;
 
-            // suggest offhand slot only if know dual wielding
-            // (this will be replace mainhand weapon at auto equip instead unwonted "you don't known dual wielding" ...
-            if (CanDualWield())
-                slots[1] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        };
-        case INVTYPE_SHIELD:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_RANGED:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_2HWEAPON:
-            slots[0] = EQUIPMENT_SLOT_MAINHAND;
-            if (CanDualWield() && CanTitanGrip())
-                slots[1] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_TABARD:
-            slots[0] = EQUIPMENT_SLOT_TABARD;
-            break;
-        case INVTYPE_WEAPONMAINHAND:
-            slots[0] = EQUIPMENT_SLOT_MAINHAND;
-            break;
-        case INVTYPE_WEAPONOFFHAND:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_HOLDABLE:
-            slots[0] = EQUIPMENT_SLOT_OFFHAND;
-            break;
-        case INVTYPE_THROWN:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_RANGEDRIGHT:
-            slots[0] = EQUIPMENT_SLOT_RANGED;
-            break;
-        case INVTYPE_BAG:
-            slots[0] = INVENTORY_SLOT_BAG_START + 0;
-            slots[1] = INVENTORY_SLOT_BAG_START + 1;
-            slots[2] = INVENTORY_SLOT_BAG_START + 2;
-            slots[3] = INVENTORY_SLOT_BAG_START + 3;
-            break;
-        case INVTYPE_RELIC:
-        {
-            switch (proto->SubClass)
-            {
-                case ITEM_SUBCLASS_ARMOR_LIBRAM:
-                    if (pClass == CLASS_PALADIN)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_IDOL:
-                    if (pClass == CLASS_DRUID)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_TOTEM:
-                    if (pClass == CLASS_SHAMAN)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_MISC:
-                    if (pClass == CLASS_WARLOCK)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-                case ITEM_SUBCLASS_ARMOR_SIGIL:
-                    if (pClass == CLASS_DEATH_KNIGHT)
-                        slots[0] = EQUIPMENT_SLOT_RANGED;
-                    break;
-            }
-            break;
-        }
-        default :
-            return NULL_SLOT;
+    if (!ViableEquipSlots(proto, &slots[0]))
+    {
+        //DEBUG_LOG("**** [Player::FindEquipSlot] ViableEquipSlots returned FALSE  ****");
+        return NULL_SLOT;
     }
 
     if (slot != NULL_SLOT)
@@ -8571,6 +8448,209 @@ uint8 Player::FindEquipSlot(ItemPrototype const* proto, uint32 slot, bool swap) 
 
     // no free position
     return NULL_SLOT;
+}
+
+
+bool Player::ViableEquipSlots(ItemPrototype const* proto, uint8 *viable_slots) const
+{
+    uint8 pClass;
+
+    //DEBUG_LOG("**** [Player::ViableEquipSlots] Start ****");
+
+    if (!viable_slots)
+    {
+        //DEBUG_LOG("**** [Player::ViableEquipSlots] Return array is NULL ****");
+        return false;
+    }
+
+    //DEBUG_LOG("**** [Player::ViableEquipSlots] Initialize return array ****");
+    viable_slots[0] = NULL_SLOT;
+    viable_slots[1] = NULL_SLOT;
+    viable_slots[2] = NULL_SLOT;
+    viable_slots[3] = NULL_SLOT;
+
+    if (CanUseItem(proto) == EQUIP_ERR_OK)
+    {
+        //DEBUG_LOG("**** [Player::ViableEquipSlots] Class/Race/Faction determined viable ****");
+
+        //DEBUG_LOG("**** [Player::ViableEquipSlots] switch (proto->InventoryType) ****");
+        switch (proto->InventoryType)
+        {
+            case INVTYPE_HEAD:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_HEAD ****");
+                viable_slots[0] = EQUIPMENT_SLOT_HEAD;
+                break;
+            case INVTYPE_NECK:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_NECK ****");
+                viable_slots[0] = EQUIPMENT_SLOT_NECK;
+                break;
+            case INVTYPE_SHOULDERS:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_SHOULDERS ****");
+                viable_slots[0] = EQUIPMENT_SLOT_SHOULDERS;
+                break;
+            case INVTYPE_BODY:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_BODY ****");
+                viable_slots[0] = EQUIPMENT_SLOT_BODY;
+                break;
+            case INVTYPE_CHEST:
+            case INVTYPE_ROBE:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == %s ****",(INVTYPE_CHEST ? "INVTYPE_CHEST" : "INVTYPE_ROBE"));
+                viable_slots[0] = EQUIPMENT_SLOT_CHEST;
+                break;
+            case INVTYPE_WAIST:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_WAIST ****");
+                viable_slots[0] = EQUIPMENT_SLOT_WAIST;
+                break;
+            case INVTYPE_LEGS:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_LEGS ****");
+                viable_slots[0] = EQUIPMENT_SLOT_LEGS;
+                break;
+            case INVTYPE_FEET:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_FEET ****");
+                viable_slots[0] = EQUIPMENT_SLOT_FEET;
+                break;
+            case INVTYPE_WRISTS:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_WRISTS ****");
+                viable_slots[0] = EQUIPMENT_SLOT_WRISTS;
+                break;
+            case INVTYPE_HANDS:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_HANDS ****");
+                viable_slots[0] = EQUIPMENT_SLOT_HANDS;
+                break;
+            case INVTYPE_FINGER:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_FINGER ****");
+                viable_slots[0] = EQUIPMENT_SLOT_FINGER1;
+                viable_slots[1] = EQUIPMENT_SLOT_FINGER2;
+                break;
+            case INVTYPE_TRINKET:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_TRINKET ****");
+                viable_slots[0] = EQUIPMENT_SLOT_TRINKET1;
+                viable_slots[1] = EQUIPMENT_SLOT_TRINKET2;
+                break;
+            case INVTYPE_CLOAK:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_CLOAK ****");
+                viable_slots[0] = EQUIPMENT_SLOT_BACK;
+                break;
+            case INVTYPE_WEAPON:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_WEAPON ****");
+                viable_slots[0] = EQUIPMENT_SLOT_MAINHAND;
+
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] INVTYPE_WEAPON/Determining if can dual weild ****");
+                if (CanDualWield())
+                {
+                    //DEBUG_LOG("**** [Player::ViableEquipSlots] INVTYPE_WEAPON/CanDualWield() == TRUE  ****");
+                    viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
+                }
+                break;
+            case INVTYPE_SHIELD:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_SHIELD ****");
+                viable_slots[0] = EQUIPMENT_SLOT_OFFHAND;
+                break;
+            case INVTYPE_RANGED:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RANGED ****");
+                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case INVTYPE_2HWEAPON:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_2HWEAPON ****");
+                viable_slots[0] = EQUIPMENT_SLOT_MAINHAND;
+
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] INVTYPE_2HWEAPON/Determining if can dual weild and Titian Grip ****");
+                if (CanDualWield() && CanTitanGrip())
+                {
+                    //DEBUG_LOG("**** [Player::ViableEquipSlots] INVTYPE_2HWEAPON/CanDualWield() && CanTitanGrip() == TRUE  ****");
+                    viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
+                }
+                break;
+            case INVTYPE_TABARD:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_TABARD ****");
+                viable_slots[0] = EQUIPMENT_SLOT_TABARD;
+                break;
+            case INVTYPE_WEAPONMAINHAND:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_WEAPONMAINHAND ****");
+                viable_slots[0] = EQUIPMENT_SLOT_MAINHAND;
+                break;
+            case INVTYPE_WEAPONOFFHAND:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_WEAPONOFFHAND ****");
+                viable_slots[0] = EQUIPMENT_SLOT_OFFHAND;
+                break;
+            case INVTYPE_HOLDABLE:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_HOLDABLE ****");
+                viable_slots[0] = EQUIPMENT_SLOT_OFFHAND;
+                break;
+            case INVTYPE_THROWN:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_THROWN ****");
+                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case INVTYPE_RANGEDRIGHT:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RANGEDRIGHT ****");
+                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                break;
+            case INVTYPE_BAG:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_BAG ****");
+                viable_slots[0] = INVENTORY_SLOT_BAG_START + 0;
+                viable_slots[1] = INVENTORY_SLOT_BAG_START + 1;
+                viable_slots[2] = INVENTORY_SLOT_BAG_START + 2;
+                viable_slots[3] = INVENTORY_SLOT_BAG_START + 3;
+                break;
+            case INVTYPE_RELIC:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC ****");
+
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC - Determine Play Class ****");
+                pClass = getClass();
+
+                if (pClass)
+                {
+                    //DEBUG_LOG("**** [Player::ViableEquipSlots]  proto->InventoryType == INVTYPE_RELIC - Call to getClass() returned sucess ****");
+
+                    switch (proto->SubClass)
+                    {
+                        case ITEM_SUBCLASS_ARMOR_LIBRAM:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == ITEM_SUBCLASS_ARMOR_LIBRAM ****");
+                            if (pClass == CLASS_PALADIN)
+                            {
+                                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                            }
+                            break;
+                        case ITEM_SUBCLASS_ARMOR_IDOL:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == ITEM_SUBCLASS_ARMOR_IDOL ****");
+                            if (pClass == CLASS_DRUID)
+                            {
+                                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                            }
+                            break;
+                        case ITEM_SUBCLASS_ARMOR_TOTEM:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == ITEM_SUBCLASS_ARMOR_TOTEM ****");
+                            if (pClass == CLASS_SHAMAN)
+                            {
+                                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                            }
+                            break;
+                        case ITEM_SUBCLASS_ARMOR_MISC:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == ITEM_SUBCLASS_ARMOR_MISC ****");
+                            if (pClass == CLASS_WARLOCK)
+                            {
+                                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                            }
+                            break;
+                        case ITEM_SUBCLASS_ARMOR_SIGIL:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == ITEM_SUBCLASS_ARMOR_SIGIL ****");
+                            if (pClass == CLASS_DEATH_KNIGHT)
+                            {
+                                viable_slots[0] = EQUIPMENT_SLOT_RANGED;
+                            }
+                            break;
+                        default:
+                            //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == INVTYPE_RELIC / proto->SubClass == UNKNOWN ****");
+                            break;
+                    }
+                }
+                break;
+            default:
+                //DEBUG_LOG("**** [Player::ViableEquipSlots] proto->InventoryType == UNKNOWN ****");
+                break;
+        }
+    }
+    return (viable_slots[0] != NULL_SLOT);
 }
 
 InventoryResult Player::CanUnequipItems(uint32 item, uint32 count) const
@@ -12496,7 +12576,7 @@ void Player::ApplyEnchantment(Item* item, EnchantmentSlot slot, bool apply, bool
                 {
                     if (getClass() == CLASS_SHAMAN)
                     {
-                        float addValue = 0.0f;
+                        float addValue;
                         if (item->GetSlot() == EQUIPMENT_SLOT_MAINHAND)
                         {
                             addValue = float(enchant_amount * item->GetProto()->Delay / 1000.0f);
@@ -14693,12 +14773,8 @@ void Player::TalkedToCreature(uint32 entry, ObjectGuid guid)
                     if (qInfo->ReqSpell[j] > 0 || qInfo->ReqCreatureOrGOId[j] < 0)
                         continue;
 
-                    uint32 reqTarget = 0;
-
-                    if (qInfo->ReqCreatureOrGOId[j] > 0)    // creature activate objectives
-                        // checked at quest_template loading
-                        reqTarget = qInfo->ReqCreatureOrGOId[j];
-                    else
+                    uint32 reqTarget = qInfo->ReqCreatureOrGOId[j];
+                    if (reqTarget <= 0)    // creature activate objectives
                         continue;
 
                     if (reqTarget == entry)
@@ -18355,11 +18431,12 @@ void Player::RemovePetitionsAndSigns(ObjectGuid guid, uint32 type)
 {
     uint32 lowguid = guid.GetCounter();
 
-    QueryResult* result = nullptr;
+    QueryResult* result;
     if (type == 10)
         result = CharacterDatabase.PQuery("SELECT ownerguid,petitionguid FROM petition_sign WHERE playerguid = '%u'", lowguid);
     else
         result = CharacterDatabase.PQuery("SELECT ownerguid,petitionguid FROM petition_sign WHERE playerguid = '%u' AND type = '%u'", lowguid, type);
+
     if (result)
     {
         do                                                  // this part effectively does nothing, since the deletion / modification only takes place _after_ the PetitionQuery. Though I don't know if the result remains intact if I execute the delete query beforehand.
@@ -18594,13 +18671,11 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc 
     uint32 totalcost = 0;
 
     uint32 prevnode = sourcenode;
-    uint32 lastnode = 0;
 
     for (uint32 i = 1; i < nodes.size(); ++i)
     {
         uint32 path, cost;
-
-        lastnode = nodes[i];
+        uint32 lastnode = nodes[i];
         sObjectMgr.GetTaxiPath(prevnode, lastnode, path, cost);
 
         if (!path)
@@ -18689,7 +18764,6 @@ void Player::ContinueTaxiFlight()
 
     TaxiPathNodeList const& nodeList = sTaxiPathNodesByPath[path];
 
-    float distPrev = MAP_SIZE * MAP_SIZE;
     float distNext =
         (nodeList[0].x - GetPositionX()) * (nodeList[0].x - GetPositionX()) +
         (nodeList[0].y - GetPositionY()) * (nodeList[0].y - GetPositionY()) +
@@ -18704,7 +18778,7 @@ void Player::ContinueTaxiFlight()
         if (node.mapid != GetMapId())
             continue;
 
-        distPrev = distNext;
+        float distPrev = distNext;
 
         distNext =
             (node.x - GetPositionX()) * (node.x - GetPositionX()) +
@@ -18989,7 +19063,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorGuid, uint32 vendorslot, uin
         return false;
     }
 
-    Item* pItem = nullptr;
+    Item* pItem;
 
     if ((bag == NULL_BAG && slot == NULL_SLOT) || IsInventoryPos(bag, slot))
     {
@@ -20324,8 +20398,8 @@ bool Player::IsSpellFitByClassAndRace(uint32 spell_id, uint32* pReqlevel /*= nul
         if (abilityEntry->classmask && (abilityEntry->classmask & classmask) == 0)
             continue;
 
-        SkillRaceClassInfoMapBounds bounds = sSpellMgr.GetSkillRaceClassInfoMapBounds(abilityEntry->skillId);
-        for (SkillRaceClassInfoMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
+        SkillRaceClassInfoMapBounds raceBounds = sSpellMgr.GetSkillRaceClassInfoMapBounds(abilityEntry->skillId);
+        for (SkillRaceClassInfoMap::const_iterator itr = raceBounds.first; itr != raceBounds.second; ++itr)
         {
             SkillRaceClassInfoEntry const* skillRCEntry = itr->second;
             if ((skillRCEntry->raceMask & racemask) && (skillRCEntry->classMask & classmask))
@@ -20881,7 +20955,7 @@ uint32 Player::GetCorpseReclaimDelay(bool pvp) const
 
 void Player::UpdateCorpseReclaimDelay()
 {
-    bool pvp = m_ExtraFlags & PLAYER_EXTRA_PVP_DEATH;
+    const bool pvp = !!(m_ExtraFlags & PLAYER_EXTRA_PVP_DEATH);
 
     if ((pvp && !sWorld.getConfig(CONFIG_BOOL_DEATH_CORPSE_RECLAIM_DELAY_PVP)) ||
             (!pvp && !sWorld.getConfig(CONFIG_BOOL_DEATH_CORPSE_RECLAIM_DELAY_PVE)))
@@ -21971,9 +22045,9 @@ void Player::UpdateKnownCurrencies(uint32 itemId, bool apply)
     if (CurrencyTypesEntry const* ctEntry = sCurrencyTypesStore.LookupEntry(itemId))
     {
         if (apply)
-            SetFlag64(PLAYER_FIELD_KNOWN_CURRENCIES, (UI64LIT(1) << (ctEntry->BitIndex - 1)));
+            SetFlag64(PLAYER_FIELD_KNOWN_CURRENCIES, (uint64(1) << (ctEntry->BitIndex - 1)));
         else
-            RemoveFlag64(PLAYER_FIELD_KNOWN_CURRENCIES, (UI64LIT(1) << (ctEntry->BitIndex - 1)));
+            RemoveFlag64(PLAYER_FIELD_KNOWN_CURRENCIES, (uint64(1) << (ctEntry->BitIndex - 1)));
     }
 }
 
@@ -23094,3 +23168,35 @@ float Player::GetCollisionHeight(bool mounted) const
         return modelData->CollisionHeight;
     }
 }
+
+// set data to accept next resurrect response and process it with required data
+void Player::SetResurrectRequestData(Unit* caster, uint32 health, uint32 mana)
+{
+    m_resurrectGuid = caster->GetObjectGuid();
+    m_resurrectMap = caster->GetMapId();
+    caster->GetPosition(m_resurrectX, m_resurrectY, m_resurrectZ);
+    m_resurrectHealth = health;
+    m_resurrectMana = mana;
+    m_resurrectToGhoul = false;
+}
+
+// we can use this to prepare data in case we have to resurrect player in ghoul form
+void Player::SetResurrectRequestDataToGhoul(Unit* caster)
+{
+    SetResurrectRequestData(caster, 0, 0);
+    m_resurrectToGhoul = true;
+}
+
+// clear resurrect data (no resurrect response will be accepted)
+void Player::ClearResurrectRequestData()
+{
+    m_resurrectGuid = ObjectGuid();
+    m_resurrectMap = 0;
+    m_resurrectX = .0f;
+    m_resurrectY = .0f;
+    m_resurrectZ = .0f;
+    m_resurrectHealth = 0;
+    m_resurrectMana = 0;
+    m_resurrectToGhoul = false;
+}
+

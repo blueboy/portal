@@ -23,6 +23,8 @@
 #include "SharedDefines.h"
 #include "ObjectGuid.h"
 
+#include <functional>
+
 struct AchievementEntry;
 struct AchievementCriteriaEntry;
 struct AreaTrigger;
@@ -78,7 +80,7 @@ class MANGOS_DLL_SPEC ChatHandler
     public:
         explicit ChatHandler(WorldSession* session);
         explicit ChatHandler(Player* player);
-        ~ChatHandler();
+        virtual ~ChatHandler();
 
         static char* LineFromMessage(char*& pos) { char* start = strtok(pos, "\n"); pos = nullptr; return start; }
 
@@ -124,7 +126,8 @@ class MANGOS_DLL_SPEC ChatHandler
             ObjectGuid const& targetGuid = ObjectGuid(), char const* targetName = nullptr,
             char const* channelName = nullptr, uint32 achievementId = 0);
     protected:
-        explicit ChatHandler() : m_session(nullptr) {}      // for CLI subclass
+        explicit ChatHandler() : m_session(nullptr), sentErrorMessage(false)
+        {}      // for CLI subclass
 
         bool hasStringAbbr(const char* name, const char* part);
 
@@ -739,10 +742,15 @@ class MANGOS_DLL_SPEC ChatHandler
 
 class CliHandler : public ChatHandler
 {
-    public:
-        typedef void Print(void*, char const*);
-        explicit CliHandler(uint32 accountId, AccountTypes accessLevel, void* callbackArg, Print* zprint)
-            : m_accountId(accountId), m_loginAccessLevel(accessLevel), m_callbackArg(callbackArg), m_print(zprint) {}
+    private:
+        typedef std::function<void(const char *)> Print;
+        uint32 m_accountId;
+        AccountTypes m_loginAccessLevel;
+        Print m_print;
+
+    public:        
+        CliHandler(uint32 accountId, AccountTypes accessLevel, Print zprint)
+            : m_accountId(accountId), m_loginAccessLevel(accessLevel), m_print(zprint) {}
 
         // overwrite functions
         const char* GetMangosString(int32 entry) const override;
@@ -754,12 +762,6 @@ class CliHandler : public ChatHandler
         bool needReportToTarget(Player* chr) const override;
         LocaleConstant GetSessionDbcLocale() const override;
         int GetSessionDbLocaleIndex() const override;
-
-    private:
-        uint32 m_accountId;
-        AccountTypes m_loginAccessLevel;
-        void* m_callbackArg;
-        Print* m_print;
 };
 
 #endif

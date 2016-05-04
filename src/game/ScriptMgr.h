@@ -20,7 +20,6 @@
 #define _SCRIPTMGR_H
 
 #include "Common.h"
-#include "Policies/Singleton.h"
 #include "ObjectGuid.h"
 #include "DBCEnums.h"
 
@@ -59,6 +58,7 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_RESPAWN_GAMEOBJECT       = 9,            // source = any, datalong=db_guid, datalong2=despawn_delay
     SCRIPT_COMMAND_TEMP_SUMMON_CREATURE     = 10,           // source = any, datalong=creature entry, datalong2=despawn_delay
                                                             // data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL = summon active
+                                                            // dataint = (bool) setRun; 0 = off (default), 1 = on
     SCRIPT_COMMAND_OPEN_DOOR                = 11,           // datalong=db_guid (or not provided), datalong2=reset_delay
     SCRIPT_COMMAND_CLOSE_DOOR               = 12,           // datalong=db_guid (or not provided), datalong2=reset_delay
     SCRIPT_COMMAND_ACTIVATE_OBJECT          = 13,           // source = unit, target=GO
@@ -123,6 +123,13 @@ enum ScriptCommand                                          // resSource, resTar
                                                             // data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL set/unset byte flag UNIT_BYTE1_FLAG_FLY_ANIM
     SCRIPT_COMMAND_DESPAWN_GO               = 40,           // resTarget = GameObject
     SCRIPT_COMMAND_RESPAWN                  = 41,           // resSource = Creature. Requires SCRIPT_FLAG_BUDDY_IS_DESPAWNED to find dead or despawned targets
+    SCRIPT_COMMAND_SET_EQUIPMENT_SLOTS      = 42,           // resSource = Creature
+                                                            // datalong = resetDefault: bool 0=false, 1=true
+                                                            // dataint = main hand slot; dataint2 = off hand slot; dataint3 = ranged slot
+    SCRIPT_COMMAND_RESET_GO                 = 43,           // resTarget = GameObject
+    SCRIPT_COMMAND_UPDATE_TEMPLATE          = 44,           // resSource = Creature
+                                                            // datalong = new Creature entry
+                                                            // datalong2 = Alliance(0) Horde(1), other values throw error
 };
 
 #define MAX_TEXT_ID 4                                       // used for SCRIPT_COMMAND_TALK, SCRIPT_COMMAND_EMOTE, SCRIPT_COMMAND_CAST_SPELL, SCRIPT_COMMAND_TERMINATE_SCRIPT
@@ -380,6 +387,20 @@ struct ScriptInfo
         // datalong unsed                                   // SCRIPT_COMMAND_DESPAWN_GO (40)
         // datalong unsed                                   // SCRIPT_COMMAND_RESPAWN (41)
 
+        struct                                              // SCRIPT_COMMAND_SET_EQUIPMENT_SLOTS (42)
+        {
+            uint32 resetDefault;                            // datalong
+            uint32 empty;                                   // datalong2
+        } setEquipment;
+
+        // datalong unsed                                   // SCRIPT_COMMAND_RESET_GO (43)
+
+        struct                                              // SCRIPT_COMMAND_UPDATE_TEMPLATE (44)
+        {
+            uint32 newTemplate;                             // datalong
+            uint32 newFactionTeam;                          // datalong2
+        } updateTemplate;
+
         struct
         {
             uint32 data[2];
@@ -423,6 +444,7 @@ struct ScriptInfo
             case SCRIPT_COMMAND_ACTIVATE_OBJECT:
             case SCRIPT_COMMAND_GO_LOCK_STATE:
             case SCRIPT_COMMAND_DESPAWN_GO:
+            case SCRIPT_COMMAND_RESET_GO:
                 return false;
             default:
                 return true;

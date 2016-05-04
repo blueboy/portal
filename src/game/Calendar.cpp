@@ -17,7 +17,6 @@
  */
 
 #include "Calendar.h"
-#include "Guild.h"
 #include "Mail.h"
 #include "ObjectMgr.h"
 #include "ProgressBar.h"
@@ -195,7 +194,7 @@ CalendarInvite::CalendarInvite(CalendarEvent* event, uint64 inviteId, ObjectGuid
 // fill all player events in provided CalendarEventsList
 void CalendarMgr::GetPlayerEventsList(ObjectGuid const& guid, CalendarEventsList& calEventList)
 {
-    uint32 guildId = 0;
+    uint32 guildId;
     Player* player = sObjectMgr.GetPlayer(guid);
     if (player)
         guildId = player->GetGuildId();

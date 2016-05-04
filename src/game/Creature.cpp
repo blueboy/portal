@@ -25,7 +25,6 @@
 #include "ObjectGuid.h"
 #include "SQLStorages.h"
 #include "SpellMgr.h"
-#include "QuestDef.h"
 #include "GossipDef.h"
 #include "Player.h"
 #include "GameEventMgr.h"
@@ -36,8 +35,6 @@
 #include "MapManager.h"
 #include "CreatureAI.h"
 #include "CreatureAISelector.h"
-#include "Formulas.h"
-#include "WaypointMovementGenerator.h"
 #include "InstanceData.h"
 #include "MapPersistentStateMgr.h"
 #include "BattleGround/BattleGroundMgr.h"
@@ -174,8 +171,7 @@ void Creature::AddToWorld()
     Unit::AddToWorld();
 
     // Make active if required
-    std::set<uint32> const* mapList = sWorld.getConfigForceLoadMapIds();
-    if ((mapList && mapList->find(GetMapId()) != mapList->end()) || (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
+    if (sWorld.isForceLoadMap(GetMapId()) || (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
         SetActiveObjectState(true);
 }
 
@@ -345,7 +341,7 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
     UpdateSpeed(MOVE_WALK, false);
     UpdateSpeed(MOVE_RUN,  false);
 
-    SetLevitate(cinfo->InhabitType & INHABIT_AIR); // TODO: may not be correct to send opcode at this point (already handled by UPDATE_OBJECT createObject)
+    SetLevitate(!!(cinfo->InhabitType & INHABIT_AIR)); // TODO: may not be correct to send opcode at this point (already handled by UPDATE_OBJECT createObject)
 
     // check if we need to add swimming movement. TODO: i thing movement flags should be computed automatically at each movement of creature so we need a sort of UpdateMovementFlags() method
     if (cinfo->InhabitType & INHABIT_WATER &&               // check inhabit type water
@@ -368,7 +364,14 @@ bool Creature::UpdateEntry(uint32 Entry, Team team, const CreatureData* data /*=
     // creatures always have melee weapon ready if any
     SetSheath(SHEATH_STATE_MELEE);
 
-    SelectLevel(GetCreatureInfo(), preserveHPAndPower ? GetHealthPercent() : 100.0f);
+    if (preserveHPAndPower)
+    {
+        uint32 healthPercent = GetHealthPercent();
+        SelectLevel();
+        SetHealthPercent(healthPercent);
+    }
+    else
+        SelectLevel();
 
     if (team == HORDE)
         setFaction(GetCreatureInfo()->FactionHorde);
@@ -447,39 +450,30 @@ uint32 Creature::ChooseDisplayId(const CreatureInfo* cinfo, const CreatureData* 
     if (data && data->modelid_override)
         return data->modelid_override;
 
-    // use defaults from the template
-    uint32 display_id = 0;
+    // use defaults from the template model id 1
+    uint32 display_id = cinfo->ModelId[0];
 
     // models may be categorized as (in this order):
     // if mod4 && mod3 && mod2 && mod1  use any, by 25%-chance (other gender is selected and replaced after this function)
-    // if mod3 && mod2 && mod1          use mod3 unless mod2 has modelid_alt_model (then all by 33%-chance)
-    // if mod2                          use mod2 unless mod2 has modelid_alt_model (then both by 50%-chance)
+    // if mod3 && mod2 && mod1          use mod1 unless mod3 has modelid_alt_model (then all by 33%-chance)
+    // if mod2                          use mod1 unless mod2 has modelid_alt_model (then both by 50%-chance)
     // if mod1                          use mod1
 
-    // The follow decision tree needs to be updated if MAX_CREATURE_MODEL is changed.
-    static_assert(MAX_CREATURE_MODEL == 4, "Need to update model selection code for new or removed model fields");
-
     // model selected here may be replaced with other_gender using own function
-    if (cinfo->ModelId[3] && cinfo->ModelId[2] && cinfo->ModelId[1] && cinfo->ModelId[0])
+    // We use this to eliminate invisible models vs. "dummy" models (infernals, etc).
+    // Where it's expected to select one of two, model must have a alternative model defined (alternative model is normally the same as defined in ModelId1).
+    // Same pattern is used in the above model selection, but the result may be ModelId3 and not ModelId2 as here.
+    if (sObjectMgr.GetCreatureModelAlternativeModel(display_id))
     {
-        display_id = cinfo->ModelId[urand(0, 3)];
-    }
-    else if (cinfo->ModelId[2] && cinfo->ModelId[1] && cinfo->ModelId[0])
-    {
-        uint32 modelid_tmp = sObjectMgr.GetCreatureModelAlternativeModel(cinfo->ModelId[1]);
-        display_id = modelid_tmp ? cinfo->ModelId[urand(0, 2)] : cinfo->ModelId[2];
-    }
-    else if (cinfo->ModelId[1])
-    {
-        // We use this to eliminate invisible models vs. "dummy" models (infernals, etc).
-        // Where it's expected to select one of two, model must have a alternative model defined (alternative model is normally the same as defined in ModelId1).
-        // Same pattern is used in the above model selection, but the result may be ModelId3 and not ModelId2 as here.
-        uint32 modelid_tmp = sObjectMgr.GetCreatureModelAlternativeModel(cinfo->ModelId[1]);
-        display_id = modelid_tmp ? cinfo->ModelId[urand(0, 1)] : cinfo->ModelId[1];
-    }
-    else if (cinfo->ModelId[0])
-    {
-        display_id = cinfo->ModelId[0];
+        uint32 alternativeId = 0;
+        for (uint32 i = 1; i < MAX_CREATURE_MODEL - 1; ++i)
+        {
+            if (cinfo->ModelId[i])
+                ++alternativeId;
+            else
+                break;
+        }
+        display_id = cinfo->ModelId[urand(0, alternativeId)];
     }
 
     // fail safe, we use creature entry 1 and make error
@@ -528,7 +522,7 @@ void Creature::Update(uint32 update_diff, uint32 diff)
 
                 CreatureInfo const* cinfo = GetCreatureInfo();
 
-                SelectLevel(cinfo);
+                SelectLevel();
                 UpdateAllStats();  // to be sure stats is correct regarding level of the creature
                 SetUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_NONE);
                 if (m_isDeadByDefault)
@@ -713,7 +707,7 @@ void Creature::RegenerateHealth()
     if (curValue >= maxValue)
         return;
 
-    uint32 addvalue = 0;
+    uint32 addvalue;
 
     // Not only pet, but any controlled creature
     if (GetCharmerOrOwnerGuid())
@@ -1180,18 +1174,26 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     WorldDatabase.CommitTransaction();
 }
 
-void Creature::SelectLevel(const CreatureInfo* cinfo, float percentHealth /*= 100.0f*/)
+void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
 {
+    CreatureInfo const* cinfo = GetCreatureInfo();
+    if (!cinfo)
+        return;
+
     uint32 rank = IsPet() ? 0 : cinfo->Rank;                // TODO :: IsPet probably not needed here
 
-    // level
+                                                            // level
+    uint32 level = forcedLevel;
     uint32 const minlevel = cinfo->MinLevel;
     uint32 const maxlevel = cinfo->MaxLevel;
-    uint32 level = minlevel == maxlevel ? minlevel : urand(minlevel, maxlevel);
+
+    if (level == USE_DEFAULT_DATABASE_LEVEL)
+        level = minlevel == maxlevel ? minlevel : urand(minlevel, maxlevel);
+
     SetLevel(level);
 
     //////////////////////////////////////////////////////////////////////////
-    // Calculate level dependend stats
+    // Calculate level dependent stats
     //////////////////////////////////////////////////////////////////////////
 
     uint32 health;
@@ -1209,18 +1211,28 @@ void Creature::SelectLevel(const CreatureInfo* cinfo, float percentHealth /*= 10
     }
     else
     {
-        // Use old style to calculate stat values
-        float rellevel = maxlevel == minlevel ? 0 : (float(level - minlevel)) / (maxlevel - minlevel);
+        if (forcedLevel == USE_DEFAULT_DATABASE_LEVEL || (forcedLevel >= minlevel && forcedLevel <= maxlevel))
+        {
+            // Use old style to calculate stat values
+            float rellevel = maxlevel == minlevel ? 0 : (float(level - minlevel)) / (maxlevel - minlevel);
 
-        // health
-        uint32 minhealth = std::min(cinfo->MaxLevelHealth, cinfo->MinLevelHealth);
-        uint32 maxhealth = std::max(cinfo->MaxLevelHealth, cinfo->MinLevelHealth);
-        health = uint32(minhealth + uint32(rellevel * (maxhealth - minhealth)));
+            // health
+            uint32 minhealth = std::min(cinfo->MaxLevelHealth, cinfo->MinLevelHealth);
+            uint32 maxhealth = std::max(cinfo->MaxLevelHealth, cinfo->MinLevelHealth);
+            health = uint32(minhealth + uint32(rellevel * (maxhealth - minhealth)));
 
-        // mana
-        uint32 minmana = std::min(cinfo->MaxLevelMana, cinfo->MinLevelMana);
-        uint32 maxmana = std::max(cinfo->MaxLevelMana, cinfo->MinLevelMana);
-        mana = minmana + uint32(rellevel * (maxmana - minmana));
+            // mana
+            uint32 minmana = std::min(cinfo->MaxLevelMana, cinfo->MinLevelMana);
+            uint32 maxmana = std::max(cinfo->MaxLevelMana, cinfo->MinLevelMana);
+            mana = minmana + uint32(rellevel * (maxmana - minmana));
+        }
+        else
+        {
+            sLog.outError("Creature::SelectLevel> Error trying to set level(%u) for creature %s without enough data to do it!", level, GetGuidStr().c_str());
+            // probably wrong
+            health = (cinfo->MaxLevelHealth / cinfo->MaxLevel) * level;
+            mana = (cinfo->MaxLevelMana / cinfo->MaxLevel) * level;
+        }
     }
 
     health *= _GetHealthMod(rank); // Apply custom config settting
@@ -1234,11 +1246,7 @@ void Creature::SelectLevel(const CreatureInfo* cinfo, float percentHealth /*= 10
     // health
     SetCreateHealth(health);
     SetMaxHealth(health);
-
-    if (percentHealth == 100.0f)
-        SetHealth(health);
-    else
-        SetHealthPercent(percentHealth);
+    SetHealth(health);
 
     SetModifierValue(UNIT_MOD_HEALTH, BASE_VALUE, float(health));
 
@@ -1445,6 +1453,8 @@ bool Creature::LoadFromDB(uint32 guidlow, Map* map)
     // checked at creature_template loading
     m_defaultMovementType = MovementGeneratorType(data->movementType);
 
+    map->Add(this);
+    
     AIM_Initialize();
 
     // Creature Linking, Initial load is handled like respawn
@@ -2563,10 +2573,6 @@ struct SpawnCreatureInMapsWorker
             {
                 delete pCreature;
             }
-            else
-            {
-                map->Add(pCreature);
-            }
         }
     }
 
@@ -2611,6 +2617,15 @@ void Creature::SetWalk(bool enable, bool asDefault)
 
 void Creature::SetLevitate(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetLevitate(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_LEVITATING);
     else
@@ -2623,6 +2638,15 @@ void Creature::SetLevitate(bool enable)
 
 void Creature::SetSwim(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetSwim(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_SWIMMING);
     else
@@ -2635,6 +2659,15 @@ void Creature::SetSwim(bool enable)
 
 void Creature::SetCanFly(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetCanFly(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_CAN_FLY);
     else
@@ -2647,6 +2680,15 @@ void Creature::SetCanFly(bool enable)
 
 void Creature::SetFeatherFall(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetFeatherFall(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_SAFE_FALL);
     else
@@ -2659,6 +2701,15 @@ void Creature::SetFeatherFall(bool enable)
 
 void Creature::SetHover(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetHover(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_HOVER);
     else
@@ -2671,6 +2722,15 @@ void Creature::SetHover(bool enable)
 
 void Creature::SetRoot(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetRoot(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_ROOT);
     else
@@ -2683,6 +2743,15 @@ void Creature::SetRoot(bool enable)
 
 void Creature::SetWaterWalk(bool enable)
 {
+    if (Unit* unit = GetCharmer())
+    {
+        if (unit->GetTypeId() == TYPEID_PLAYER)
+        {
+            static_cast<Player*>(unit)->SetWaterWalk(enable);
+            return;
+        }
+    }
+
     if (enable)
         m_movementInfo.AddMovementFlag(MOVEFLAG_WATERWALKING);
     else

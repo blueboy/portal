@@ -24,7 +24,6 @@
 #include "GridNotifiersImpl.h"
 #include "Opcodes.h"
 #include "Log.h"
-#include "UpdateMask.h"
 #include "World.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -34,7 +33,6 @@
 #include "DynamicObject.h"
 #include "Group.h"
 #include "UpdateData.h"
-#include "MapManager.h"
 #include "ObjectAccessor.h"
 #include "CellImpl.h"
 #include "Policies/Singleton.h"
@@ -737,38 +735,38 @@ void Spell::prepareDataForTriggerSystem()
         {
             case SPELLFAMILY_MAGE:
                 // Arcane Missiles / Blizzard triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000000200080)))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000000000200080)))
                     m_canTrigger = true;
                 // Clearcasting trigger need do it
-                else if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000200000000)))
+                else if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000000200000000)))
                     m_canTrigger = true;
                 // Replenish Mana, item spell with triggered cases (Mana Agate, etc mana gems)
-                else if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000010000000000)))
+                else if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000010000000000)))
                     m_canTrigger = true;
                 break;
             case SPELLFAMILY_WARLOCK:
                 // For Hellfire Effect / Rain of Fire / Seed of Corruption triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000800000000060)))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000800000000060)))
                     m_canTrigger = true;
                 break;
             case SPELLFAMILY_PRIEST:
                 // For Penance,Mind Sear,Mind Flay heal/damage triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0001800000800000), 0x00000040))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x0001800000800000), 0x00000040))
                     m_canTrigger = true;
                 break;
             case SPELLFAMILY_ROGUE:
                 // For poisons need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x000000101001E000)))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x000000101001E000)))
                     m_canTrigger = true;
                 break;
             case SPELLFAMILY_HUNTER:
                 // Hunter Rapid Killing/Explosive Trap Effect/Immolation Trap Effect/Frost Trap Aura/Snake Trap Effect/Explosive Shot
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0100200000000214), 0x00000200))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x0100200000000214), 0x00000200))
                     m_canTrigger = true;
                 break;
             case SPELLFAMILY_PALADIN:
                 // For Judgements (all) / Holy Shock triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0001000900B80400)))
+                if (m_spellInfo->IsFitToFamilyMask(uint64(0x0001000900B80400)))
                     m_canTrigger = true;
                 break;
             default:
@@ -826,7 +824,7 @@ void Spell::prepareDataForTriggerSystem()
 
     // Hunter traps spells (for Entrapment trigger)
     // Gives your Immolation Trap, Frost Trap, Explosive Trap, and Snake Trap ....
-    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && (m_spellInfo->SpellFamilyFlags & UI64LIT(0x000020000000001C)))
+    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && (m_spellInfo->SpellFamilyFlags & uint64(0x000020000000001C)))
         m_procAttacker |= PROC_FLAG_ON_TRAP_ACTIVATION;
 }
 
@@ -881,7 +879,7 @@ void Spell::AddUnitTarget(Unit* pVictim, SpellEffectIndex effIndex)
     if (speed > 0.0f && affectiveObject && (pVictim != affectiveObject || (m_targets.m_targetMask & (TARGET_FLAG_SOURCE_LOCATION | TARGET_FLAG_DEST_LOCATION))))
     {
         // calculate spell incoming interval
-        float dist = 0.0f;                                  // distance to impact
+        float dist;                                         // distance to impact
         if (pVictim == affectiveObject)                     // Calculate dist to destination target also for self-cast spells
         {
             if (m_targets.m_targetMask & TARGET_FLAG_DEST_LOCATION)
@@ -901,7 +899,7 @@ void Spell::AddUnitTarget(Unit* pVictim, SpellEffectIndex effIndex)
             m_delayMoment = target.timeDelay;
     }
     else
-        target.timeDelay = UI64LIT(0);
+        target.timeDelay = uint64(0);
 
     // If target reflect spell back to caster
     if (target.missCondition == SPELL_MISS_REFLECT)
@@ -970,7 +968,7 @@ void Spell::AddGOTarget(GameObject* pVictim, SpellEffectIndex effIndex)
             m_delayMoment = target.timeDelay;
     }
     else
-        target.timeDelay = UI64LIT(0);
+        target.timeDelay = uint64(0);
 
     // Add target to list
     m_UniqueGOTargetInfo.push_back(target);
@@ -1152,14 +1150,14 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         // Haunt (NOTE: for avoid use additional field damage stored in dummy value (replace unused 100%)
         // apply before deal damage because aura can be removed at target kill
         if (m_spellInfo->SpellFamilyName == SPELLFAMILY_WARLOCK && m_spellInfo->SpellIconID == 3172 &&
-                (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0004000000000000)))
+                (m_spellInfo->SpellFamilyFlags & uint64(0x0004000000000000)))
             if (Aura* dummy = unitTarget->GetDummyAura(m_spellInfo->Id))
                 dummy->GetModifier()->m_amount = damageInfo.damage;
 
         caster->DealSpellDamage(&damageInfo, true);
 
         // Scourge Strike, here because needs to use final damage in second part of the spell
-        if (m_spellInfo->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && m_spellInfo->SpellFamilyFlags & UI64LIT(0x0800000000000000))
+        if (m_spellInfo->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && m_spellInfo->SpellFamilyFlags & uint64(0x0800000000000000))
         {
             uint32 count = 0;
             Unit::SpellAuraHolderMap const& auras = unitTarget->GetSpellAuraHolderMap();
@@ -1313,7 +1311,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
     }
 
     // Get Data Needed for Diminishing Returns, some effects may have multiple auras, so this must be done on spell hit, not aura add
-    m_diminishGroup = GetDiminishingReturnsGroupForSpell(m_spellInfo, m_triggeredByAuraSpell);
+    m_diminishGroup = GetDiminishingReturnsGroupForSpell(m_spellInfo, !!m_triggeredByAuraSpell);
     m_diminishLevel = unit->GetDiminishing(m_diminishGroup);
     // Increase Diminishing on unit, current informations for actually casts will use values above
     if ((GetDiminishingReturnsGroupType(m_diminishGroup) == DRTYPE_PLAYER && unit->GetTypeId() == TYPEID_PLAYER) ||
@@ -1852,6 +1850,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
             switch (m_spellInfo->Id)
             {
                 // Do not target current victim
+                case 30769:                                 // Pick Red Riding Hood
                 case 30843:                                 // Enfeeble
                 case 31347:                                 // Doom
                 case 37676:                                 // Insidious Whisper
@@ -2072,7 +2071,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
                     FillAreaTargets(targetUnitMap, radius, PUSH_DEST_CENTER, SPELL_TARGETS_AOE_DAMAGE);
 
                     // Mind Sear, triggered
-                    if (m_spellInfo->IsFitToFamily(SPELLFAMILY_PRIEST, UI64LIT(0x0008000000000000)))
+                    if (m_spellInfo->IsFitToFamily(SPELLFAMILY_PRIEST, uint64(0x0008000000000000)))
                         if (Unit* unitTarget = m_targets.getUnitTarget())
                             targetUnitMap.remove(unitTarget);
 
@@ -3030,6 +3029,10 @@ void Spell::prepare(SpellCastTargets const* targets, Aura* triggeredByAura)
         SendSpellStart();
 
         TriggerGlobalCooldown();
+
+        // Execute instant spells immediate
+        if (m_timer == 0 && !IsNextMeleeSwingSpell() && !IsAutoRepeat() && !IsChanneledSpell(m_spellInfo))
+            cast();
     }
     // execute triggered without cast time explicitly in call point
     else if (m_timer == 0)
@@ -3174,7 +3177,7 @@ void Spell::cast(bool skipCheck)
         case SPELLFAMILY_MAGE:
         {
             // Ice Block
-            if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000008000000000))
+            if (m_spellInfo->SpellFamilyFlags & uint64(0x0000008000000000))
                 AddPrecastSpell(41425);                     // Hypothermia
             // Icy Veins
             else if (m_spellInfo->Id == 12472)
@@ -3194,13 +3197,13 @@ void Spell::cast(bool skipCheck)
         case SPELLFAMILY_WARRIOR:
         {
             // Shield Slam
-            if ((m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000020000000000)) && m_spellInfo->Category == 1209)
+            if ((m_spellInfo->SpellFamilyFlags & uint64(0x0000020000000000)) && m_spellInfo->Category == 1209)
             {
                 if (m_caster->HasAura(58375))               // Glyph of Blocking
                     AddTriggeredSpell(58374);               // Glyph of Blocking
             }
             // Bloodrage
-            if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000000100))
+            if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000100))
             {
                 if (m_caster->HasAura(70844))               // Item - Warrior T10 Protection 4P Bonus
                     AddTriggeredSpell(70845);               // Stoicism
@@ -3217,10 +3220,10 @@ void Spell::cast(bool skipCheck)
         {
             // Power Word: Shield
             if (m_spellInfo->Mechanic == MECHANIC_SHIELD &&
-                    (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000000001)))
+                    (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000001)))
                 AddPrecastSpell(6788);                      // Weakened Soul
             // Prayer of Mending (jump animation), we need formal caster instead original for correct animation
-            else if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000002000000000))
+            else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000002000000000))
                 AddTriggeredSpell(41637);
 
             switch (m_spellInfo->Id)
@@ -3293,20 +3296,20 @@ void Spell::cast(bool skipCheck)
                     AddPrecastSpell(67485);                 // Hand of Rekoning (no typos in name ;) )
             }
             // Divine Shield, Divine Protection or Hand of Protection
-            else if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000400080))
+            else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000400080))
             {
                 AddPrecastSpell(25771);                     // Forbearance
                 AddPrecastSpell(61987);                     // Avenging Wrath Marker
             }
             // Lay on Hands
-            else if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000008000))
+            else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000008000))
             {
                 // only for self cast
                 if (m_caster == m_targets.getUnitTarget())
                     AddPrecastSpell(25771);                 // Forbearance
             }
             // Avenging Wrath
-            else if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000200000000000))
+            else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000200000000000))
                 AddPrecastSpell(61987);                     // Avenging Wrath Marker
             break;
         }
@@ -3322,7 +3325,7 @@ void Spell::cast(bool skipCheck)
             else if (m_spellInfo->Id == 58875)
                 AddPrecastSpell(58876);
             // Totem of Wrath
-            else if (m_spellInfo->Effect[EFFECT_INDEX_0] == SPELL_EFFECT_APPLY_AREA_AURA_RAID && m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000004000000))
+            else if (m_spellInfo->Effect[EFFECT_INDEX_0] == SPELL_EFFECT_APPLY_AREA_AURA_RAID && m_spellInfo->SpellFamilyFlags & uint64(0x0000000004000000))
                 // only for main totem spell cast
                 AddTriggeredSpell(30708);                   // Totem of Wrath
             break;
@@ -4273,34 +4276,6 @@ void Spell::SendChannelUpdate(uint32 time)
 {
     if (time == 0)
     {
-        // Reset farsight for some possessing auras of possessed summoned (as they might work with different aura types)
-        if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_FARSIGHT) && m_caster->GetTypeId() == TYPEID_PLAYER && m_caster->GetCharmGuid()
-                && !IsSpellHaveAura(m_spellInfo, SPELL_AURA_MOD_POSSESS) && !IsSpellHaveAura(m_spellInfo, SPELL_AURA_MOD_POSSESS_PET))
-        {
-            Player* player = (Player*)m_caster;
-            // These Auras are applied to self, so get the possessed first
-            Unit* possessed = player->GetCharm();
-
-            player->SetCharm(nullptr);
-            if (possessed)
-                player->SetClientControl(possessed, 0);
-            player->SetMover(nullptr);
-            player->GetCamera().ResetView();
-            player->RemovePetActionBar();
-
-            if (possessed)
-            {
-                possessed->clearUnitState(UNIT_STAT_CONTROLLED);
-                possessed->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
-                possessed->SetCharmerGuid(ObjectGuid());
-                // TODO - Requires more specials for target?
-
-                // Some possessed might want to despawn?
-                if (possessed->GetUInt32Value(UNIT_CREATED_BY_SPELL) == m_spellInfo->Id && possessed->GetTypeId() == TYPEID_UNIT)
-                    ((Creature*)possessed)->ForcedDespawn();
-            }
-        }
-
         m_caster->RemoveAurasByCasterSpell(m_spellInfo->Id, m_caster->GetObjectGuid());
 
         ObjectGuid target_guid = m_caster->GetChannelObjectGuid();
@@ -4993,7 +4968,7 @@ SpellCastResult Spell::CheckCast(bool strict)
 
             // Lay on Hands (self cast)
             if (m_spellInfo->SpellFamilyName == SPELLFAMILY_PALADIN &&
-                    m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000008000))
+                    m_spellInfo->SpellFamilyFlags & uint64(0x0000000000008000))
             {
                 if (target->HasAura(25771))                 // Forbearance
                     return SPELL_FAILED_CASTER_AURASTATE;
@@ -5108,8 +5083,8 @@ SpellCastResult Spell::CheckCast(bool strict)
             // Exclusion for Pounce: Facing Limitation was removed in 2.0.1, but it still uses the same, old Ex-Flags
             // Exclusion for Mutilate:Facing Limitation was removed in 2.0.1 and 3.0.3, but they still use the same, old Ex-Flags
             // Exclusion for Throw: Facing limitation was added in 3.2.x, but that shouldn't be
-            if (!m_spellInfo->IsFitToFamily(SPELLFAMILY_DRUID, UI64LIT(0x0000000000020000)) &&
-                    !m_spellInfo->IsFitToFamily(SPELLFAMILY_ROGUE, UI64LIT(0x0020000000000000)) &&
+            if (!m_spellInfo->IsFitToFamily(SPELLFAMILY_DRUID, uint64(0x0000000000020000)) &&
+                    !m_spellInfo->IsFitToFamily(SPELLFAMILY_ROGUE, uint64(0x0020000000000000)) &&
                     m_spellInfo->Id != 2764)
             {
                 SendInterrupted(2);
@@ -5657,7 +5632,7 @@ SpellCastResult Spell::CheckCast(bool strict)
                 }
 
                 // get the lock entry
-                uint32 lockId = 0;
+                uint32 lockId;
                 if (GameObject* go = m_targets.getGOTarget())
                 {
                     // In BattleGround players can use only flags and banners
@@ -6100,9 +6075,14 @@ SpellCastResult Spell::CheckPetCast(Unit* target)
 
     if (m_caster->GetTypeId() == TYPEID_UNIT && (((Creature*)m_caster)->IsPet() || m_caster->isCharmed()))
     {
-        // dead owner (pets still alive when owners ressed?)
-        if (m_caster->GetCharmerOrOwner() && !m_caster->GetCharmerOrOwner()->isAlive())
-            return SPELL_FAILED_CASTER_DEAD;
+        // dead owner (currently only ghouled players can have alive pet casting)
+        Unit* charmer = m_caster->GetCharmerOrOwner();
+        if (charmer)
+        {
+            Player* pCharmer = charmer->GetTypeId() == TYPEID_PLAYER ? static_cast<Player*>(charmer) : nullptr;
+            if (!charmer->isAlive() && (!pCharmer || !pCharmer->IsGhouled()))
+                return SPELL_FAILED_CASTER_DEAD;
+        }
 
         if (!target && m_targets.getUnitTarget())
             target = m_targets.getUnitTarget();
@@ -7953,7 +7933,7 @@ void Spell::GetSpellRangeAndRadius(SpellEffectIndex effIndex, float& radius, uin
         case SPELLFAMILY_WARRIOR:
         {
             // Sunder Armor (main spell)
-            if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000000004000), 0x00000000) && m_spellInfo->SpellVisual[0] == 406)
+            if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000000000004000), 0x00000000) && m_spellInfo->SpellVisual[0] == 406)
                 if (m_caster->HasAura(58387))               // Glyph of Sunder Armor
                     EffectChainTarget = 2;
             break;
@@ -7961,7 +7941,7 @@ void Spell::GetSpellRangeAndRadius(SpellEffectIndex effIndex, float& radius, uin
         case SPELLFAMILY_DRUID:
         {
             // Starfall
-            if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000000000000), 0x00000100))
+            if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000000000000000), 0x00000100))
                 unMaxTargets = 2;
             break;
         }
@@ -8029,6 +8009,8 @@ void Spell::GetSpellRangeAndRadius(SpellEffectIndex effIndex, float& radius, uin
                 case 73145:                                 // Bone Spike Graveyard (during Bone Storm) (Icecrown Citadel, Lord Marrowgar encounter, 25H)
                 case 72350:                                 // Fury of Frostmourne
                 case 72351:                                 // Fury of Frostmourne
+                case 72706:                                 // Achievement Check
+                case 72830:                                 // Achievement Check
                     radius = DEFAULT_VISIBILITY_INSTANCE;
                     break;
                 default:

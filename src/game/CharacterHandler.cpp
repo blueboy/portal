@@ -28,15 +28,12 @@
 #include "Player.h"
 #include "Guild.h"
 #include "GuildMgr.h"
-#include "UpdateMask.h"
-#include "Auth/md5.h"
 #include "ObjectAccessor.h"
 #include "Group.h"
 #include "Database/DatabaseImpl.h"
 #include "PlayerDump.h"
 #include "SocialMgr.h"
 #include "Util.h"
-#include "ArenaTeam.h"
 #include "Language.h"
 #include "SpellMgr.h"
 #include "Calendar.h"
@@ -249,8 +246,8 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recv_data)
             Team team = Player::TeamForRace(race_);
             switch (team)
             {
-                case ALLIANCE: disabled = mask & (1 << 0); break;
-                case HORDE:    disabled = mask & (1 << 1); break;
+                case ALLIANCE: disabled = !!(mask & (1 << 0)); break;
+                case HORDE:    disabled = !!(mask & (1 << 1)); break;
                 default: break;
             }
 
@@ -506,7 +503,7 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recv_data)
     data << (uint8)CHAR_CREATE_SUCCESS;
     SendPacket(&data);
 
-    std::string IP_str = GetRemoteAddress();
+    const std::string &IP_str = GetRemoteAddress();
     BASIC_LOG("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
     sLog.outChar("Account: %d (IP: %s) Create Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), pNewChar->GetGUIDLow());
 
@@ -558,7 +555,7 @@ void WorldSession::HandleCharDeleteOpcode(WorldPacket& recv_data)
     if (accountId != GetAccountId())
         return;
 
-    std::string IP_str = GetRemoteAddress();
+    const std::string &IP_str = GetRemoteAddress();
     BASIC_LOG("Account: %d (IP: %s) Delete Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), lowguid);
     sLog.outChar("Account: %d (IP: %s) Delete Character:[%s] (guid: %u)", GetAccountId(), IP_str.c_str(), name.c_str(), lowguid);
 
@@ -866,9 +863,8 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
             pCurrChar->CastSpell(pCurrChar, invisibleAuraInfo, true);
     }
 
-    std::string IP_str = GetRemoteAddress();
-    sLog.outChar("Account: %d (IP: %s) Login Character:[%s] (guid: %u)",
-                 GetAccountId(), IP_str.c_str(), pCurrChar->GetName(), pCurrChar->GetGUIDLow());
+    sLog.outChar("Account: %d (IP: %s) Login Character:[%s] (guid: %u)", 
+                 GetAccountId(), GetRemoteAddress().c_str(), pCurrChar->GetName(), pCurrChar->GetGUIDLow());
 
     if (!pCurrChar->IsStandState() && !pCurrChar->hasUnitState(UNIT_STAT_STUNNED))
         pCurrChar->SetStandState(UNIT_STAND_STATE_STAND);
@@ -891,7 +887,7 @@ void WorldSession::HandleSetFactionAtWarOpcode(WorldPacket& recv_data)
     recv_data >> repListID;
     recv_data >> flag;
 
-    GetPlayer()->GetReputationMgr().SetAtWar(repListID, flag);
+    GetPlayer()->GetReputationMgr().SetAtWar(repListID, !!flag);
 }
 
 void WorldSession::HandleTutorialFlagOpcode(WorldPacket& recv_data)
@@ -941,7 +937,7 @@ void WorldSession::HandleSetFactionInactiveOpcode(WorldPacket& recv_data)
     uint8 inactive;
     recv_data >> replistid >> inactive;
 
-    _player->GetReputationMgr().SetInactive(replistid, inactive);
+    _player->GetReputationMgr().SetInactive(replistid, !!inactive);
 }
 
 void WorldSession::HandleShowingHelmOpcode(WorldPacket& /*recv_data*/)
@@ -1281,8 +1277,7 @@ void WorldSession::HandleCharCustomizeOpcode(WorldPacket& recv_data)
     CharacterDatabase.PExecute("UPDATE characters set name = '%s', at_login = at_login & ~ %u WHERE guid ='%u'", newname.c_str(), uint32(AT_LOGIN_CUSTOMIZE), guid.GetCounter());
     CharacterDatabase.PExecute("DELETE FROM character_declinedname WHERE guid ='%u'", guid.GetCounter());
 
-    std::string IP_str = GetRemoteAddress();
-    sLog.outChar("Account: %d (IP: %s), Character %s customized to: %s", GetAccountId(), IP_str.c_str(), guid.GetString().c_str(), newname.c_str());
+    sLog.outChar("Account: %d (IP: %s), Character %s customized to: %s", GetAccountId(), GetRemoteAddress().c_str(), guid.GetString().c_str(), newname.c_str());
 
     WorldPacket data(SMSG_CHAR_CUSTOMIZE, 1 + 8 + (newname.size() + 1) + 6);
     data << uint8(RESPONSE_SUCCESS);

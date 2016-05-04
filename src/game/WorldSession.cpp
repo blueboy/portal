@@ -34,9 +34,7 @@
 #include "GuildMgr.h"
 #include "World.h"
 #include "BattleGround/BattleGroundMgr.h"
-#include "MapManager.h"
 #include "SocialMgr.h"
-#include "Auth/AuthCrypt.h"
 #include "Auth/HMACSHA1.h"
 #include "zlib/zlib.h"
 #include "LootMgr.h"
@@ -44,6 +42,11 @@
 // Playerbot mod
 #include "playerbot/PlayerbotMgr.h"
 #include "playerbot/PlayerbotAI.h"
+
+#include <boost/asio/ip/address_v4.hpp>
+
+#include <mutex>
+#include <deque>
 
 // select opcodes appropriate for processing in Map::Update context for current session state
 static bool MapSessionFilterHelper(WorldSession* session, OpcodeHandler const& opHandle)
@@ -86,17 +89,11 @@ bool WorldSessionFilter::Process(WorldPacket* packet)
 
 /// WorldSession constructor
 WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
-    m_muteTime(mute_time), _player(nullptr), m_Socket(sock), _security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0),
+    m_muteTime(mute_time), m_GUIDLow(0), _player(nullptr), m_Socket(sock), _security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0),
     m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
     m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetIndexForLocale(locale)),
     m_latency(0), m_clientTimeDelay(0), m_tutorialState(TUTORIALDATA_UNCHANGED)
-{
-    if (sock)
-    {
-        m_Address = sock->GetRemoteAddress();
-        sock->AddReference();
-    }
-}
+{}
 
 /// WorldSession destructor
 WorldSession::~WorldSession()
@@ -105,17 +102,8 @@ WorldSession::~WorldSession()
     if (_player)
         LogoutPlayer(true);
 
-    /// - If have unclosed socket, close it
-    if (m_Socket)
-    {
-        m_Socket->CloseSocket();
-        m_Socket->RemoveReference();
-        m_Socket = nullptr;
-    }
-
     ///- empty incoming packet queue
-    WorldPacket* packet = nullptr;
-    while (_recvQueue.next(packet))
+    for (auto const packet : m_recvQueue)
         delete packet;
 }
 
@@ -142,7 +130,7 @@ void WorldSession::SendPacket(WorldPacket const* packet)
             GetPlayer()->GetPlayerbotMgr()->HandleMasterOutgoingPacket(*packet);
     }
 
-    if (!m_Socket)
+    if (m_Socket->IsClosed())
         return;
 
 #ifdef MANGOS_DEBUG
@@ -181,14 +169,14 @@ void WorldSession::SendPacket(WorldPacket const* packet)
 
 #endif                                                  // !MANGOS_DEBUG
 
-    if (m_Socket->SendPacket(*packet) == -1)
-        m_Socket->CloseSocket();
+    m_Socket->SendPacket(*packet);
 }
 
 /// Add an incoming packet to the queue
 void WorldSession::QueuePacket(WorldPacket* new_packet)
 {
-    _recvQueue.add(new_packet);
+    std::lock_guard<std::mutex> guard(m_recvQueueLock);
+    m_recvQueue.push_back(new_packet);
 }
 
 /// Logging helper for unexpected opcodes
@@ -212,11 +200,15 @@ void WorldSession::LogUnprocessedTail(WorldPacket* packet)
 /// Update the WorldSession (triggered by World update)
 bool WorldSession::Update(PacketFilter& updater)
 {
+    std::lock_guard<std::mutex> guard(m_recvQueueLock);
+
     ///- Retrieve packets from the receive queue and call the appropriate handlers
     /// not process packets if socket already closed
-    WorldPacket* packet = nullptr;
-    while (m_Socket && !m_Socket->IsClosed() && _recvQueue.next(packet, updater))
+    while (m_Socket && !m_Socket->IsClosed() && !m_recvQueue.empty())
     {
+        WorldPacket *packet = m_recvQueue.front();
+        m_recvQueue.pop_front();
+
         /*#if 1
         sLog.outError( "MOEP: %s (0x%.4X)",
                         packet->GetOpcodeName(),
@@ -341,24 +333,18 @@ bool WorldSession::Update(PacketFilter& updater)
         }
     }
 
-    ///- Cleanup socket pointer if need
-    if (m_Socket && m_Socket->IsClosed())
-    {
-        m_Socket->RemoveReference();
-        m_Socket = nullptr;
-    }
-
     // check if we are safe to proceed with logout
     // logout procedure should happen only in World::UpdateSessions() method!!!
     if (updater.ProcessLogout())
     {
         ///- If necessary, log the player out
-        time_t currTime = time(nullptr);
-        if (!m_Socket || (ShouldLogOut(currTime) && !m_playerLoading))
-            LogoutPlayer(true);
+        const time_t currTime = time(nullptr);
 
-        if (!m_Socket)
-            return false;                                   // Will remove this session from the world session map
+        if (m_Socket->IsClosed() || (ShouldLogOut(currTime) && !m_playerLoading))
+        {
+            LogoutPlayer(true);
+            return false;
+        }
     }
 
     return true;
@@ -502,7 +488,7 @@ void WorldSession::LogoutPlayer(bool Save)
 
         // remove player from the group if he is:
         // a) in group; b) not in raid group; c) logging out normally (not being kicked or disconnected)
-        if (_player->GetGroup() && !_player->GetGroup()->isRaidGroup() && m_Socket)
+        if (_player->GetGroup() && !_player->GetGroup()->isRaidGroup() && !m_Socket->IsClosed())
             _player->RemoveFromGroup();
 
         ///- Send update to group
@@ -558,8 +544,8 @@ void WorldSession::LogoutPlayer(bool Save)
 /// Kick a player out of the World
 void WorldSession::KickPlayer()
 {
-    if (m_Socket)
-        m_Socket->CloseSocket();
+    if (!m_Socket->IsClosed())
+        m_Socket->Close();
 }
 
 /// Cancel channeling handler
@@ -996,7 +982,7 @@ void WorldSession::SetPlayer(Player* plr)
 
 void WorldSession::SendRedirectClient(std::string& ip, uint16 port)
 {
-    uint32 ip2 = ACE_OS::inet_addr(ip.c_str());
+    const uint32 ip2 = static_cast<uint32>(boost::asio::ip::address_v4::from_string(ip).to_ulong());
     WorldPacket pkt(SMSG_CONNECT_TO, 4 + 2 + 4 + 20);
 
     pkt << uint32(ip2);                                     // inet_addr(ipstr)

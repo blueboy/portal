@@ -7,7 +7,7 @@
 
 enum
 {
-    MAX_ENCOUNTER                   = 12,
+    MAX_ENCOUNTER                   = 15,
 
     TYPE_MARROWGAR                  = 0,
     TYPE_LADY_DEATHWHISPER          = 1,
@@ -21,6 +21,9 @@ enum
     TYPE_VALITHRIA                  = 9,
     TYPE_SINDRAGOSA                 = 10,
     TYPE_LICH_KING                  = 11,
+    TYPE_BLOOD_WING_ENTRANCE        = 12,
+    TYPE_FROST_WING_ENTRANCE        = 13,
+    TYPE_PLAGUE_WING_ENTRANCE       = 14,
 
     // NPC entries
     NPC_LORD_MARROWGAR              = 36612,
@@ -46,6 +49,8 @@ enum
     NPC_SKYBREAKER_MARINE           = 37830,
     NPC_ALLIANCE_MARINE             = 37830,
     NPC_BLOOD_ORB_CONTROL           = 38008,
+    NPC_PUTRICIDES_TRAP             = 38879,        // Handles trap event before Putricide
+    NPC_GAS_STALKER                 = 36659,        // Handles the gas in Festergut room
     NPC_LANATHEL_INTRO              = 38004,
     NPC_VALITHRIA_QUEST             = 38589,
     NPC_VALITHRIA_COMBAT_TRIGGER    = 38752,
@@ -59,6 +64,27 @@ enum
     NPC_PUDDLE_STALKER              = 37013,        // related to Festergut and Rotface
     NPC_RIMEFANG                    = 37533,
     NPC_SPINESTALKER                = 37534,
+
+    // Deathwhisper cultists
+    NPC_CULT_FANATIC                = 37890,
+    NPC_CULT_ADHERENT               = 37949,
+    NPC_DEFORMED_FANATIC            = 38135,
+    NPC_EMPOWERED_ADHERENT          = 38136,
+    NPC_REANIMATED_FANATIC          = 38009,
+    NPC_REANIMATED_ADHERENT         = 38010,
+
+    // Blood wing entrance creatures
+    NPC_DARFALLEN_NOBLE             = 37663,
+    NPC_DARKFALLEN_ARCHMAGE         = 37664,
+    NPC_DARKFALLEN_BLOOD_KNIGHT     = 37595,
+    NPC_DARKFALLEN_ADVISOR          = 37571,
+    NPC_EMPOWERING_ORB_STALKER      = 36934,
+
+    // achievement types
+    MAX_SPECIAL_ACHIEV_CRITS        = 2,
+
+    TYPE_ACHIEV_BONED               = 0,
+    TYPE_ACHIEV_MADE_A_MESS         = 1,
 
     // GameObjects entries
     GO_ICEWALL_1                    = 201911,
@@ -81,7 +107,8 @@ enum
     GO_ORANGE_TUBE                  = 201617,
     GO_GREEN_TUBE                   = 201618,
 
-    // GO_BLOODWING_DOOR             = 201920,       // not used
+    // GO_BLOODWING_DOOR            = 201920,       // Blood wing entrance door - not used
+    GO_EMPOWERING_BLOOD_ORB         = 201741,
     GO_CRIMSON_HALL_DOOR            = 201376,       // Council combat door
     GO_COUNCIL_DOOR_1               = 201377,
     GO_COUNCIL_DOOR_2               = 201378,
@@ -99,7 +126,6 @@ enum
     GO_SINDRAGOSA_SHORTCUT_EXIT     = 201379,
     GO_SINDRAGOSA_ENTRANCE          = 201373,
 
-    GO_FROZENTRONE_TRANSPORTER      = 202223,
     GO_ICESHARD_1                   = 202142,
     GO_ICESHARD_2                   = 202141,
     GO_ICESHARD_3                   = 202143,
@@ -135,10 +161,28 @@ enum
     GO_DREAMWALKER_CACHE_10_H       = 202338,
     GO_DREAMWALKER_CACHE_25_H       = 202340,
 
+    // transporters
+    GO_TRANSPORTER_FROZEN_THRONE    = 202223,       // used only for display
+    GO_TRANSPORTER_UPPER_SPIRE      = 202235,
+    GO_TRANSPORTER_LIGHTS_HAMMER    = 202242,
+    GO_TRANSPORTER_RAMPART_SKULLS   = 202243,
+    GO_TRANSPORTER_DEATHBRINGER     = 202244,
+    GO_TRANSPORTER_ORATORY_DAMNED   = 202245,
+    GO_TRANSPORTER_SINDRAGOSA       = 202246,
+
     // Area triggers
-    AREATRIGGER_MARROWGAR_INTRO     = 5732,
-    AREATRIGGER_DEATHWHISPER_INTRO  = 5709,
-    AREATRIGGER_SINDRAGOSA_PLATFORM = 5604,
+    AT_SINDRAGOSA_PLATFORM          = 5604,
+    AT_LIGHTS_HAMMER_INTRO_1        = 5611,
+    AT_LIGHTS_HAMMER_INTRO_2        = 5612,
+    AT_PUTRICIDES_TRAP              = 5647,
+    AT_DEATHWHISPER_INTRO           = 5709,
+    AT_FROZEN_THRONE_TELE           = 5718,
+    AT_MARROWGAR_INTRO              = 5732,
+
+    // Spells
+    SPELL_SOUL_FEAST                = 71203,            // kill credit for 38121
+    SPELL_FULL_HOUSE_ACHIEV_CHECK   = 72827,
+    SPELL_SIPHON_ESSENCE            = 70299,
 
     // Achievement criterias
     ACHIEV_CRIT_BONED_10N                  = 12775,     // Lord Marrowgar, achievs 4534, 4610
@@ -200,6 +244,11 @@ enum
     ACHIEV_CRIT_WAITING_A_LONG_TIME_25N    = 13244,
     ACHIEV_CRIT_WAITING_A_LONG_TIME_10H    = 13247,
     ACHIEV_CRIT_WAITING_A_LONG_TIME_25H    = 13245,
+
+    ACHIEV_CRIT_NECK_DEEP_VILE_10N         = 12823,    // Lich King, achievs 4581, 4622
+    ACHIEV_CRIT_NECK_DEEP_VILE_25N         = 13243,
+    ACHIEV_CRIT_NECK_DEEP_VILE_10H         = 13163,
+    ACHIEV_CRIT_NECK_DEEP_VILE_25H         = 13164,
 };
 
 class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelper
@@ -214,6 +263,7 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
 
+        void OnCreatureEnterCombat(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
@@ -233,6 +283,7 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
         // Open Putricide door in a few seconds
         void DoPreparePutricideDoor() { m_uiPutricideValveTimer = 15000; }
 
+        void SetSpecialAchievementCriteria(uint32 uiType, bool bIsMet);
         bool CheckAchievementCriteriaMeet(uint32 uiCriteriaId, Player const* pSource, Unit const* pTarget = NULL, uint32 uiMiscvalue1 = 0) const override;
 
         void Update(uint32 uiDiff) override;
@@ -240,6 +291,7 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
     private:
         std::string m_strInstData;
         uint32 m_auiEncounter[MAX_ENCOUNTER];
+        bool m_abAchievCriteria[MAX_SPECIAL_ACHIEV_CRITS];
 
         uint32 m_uiTeam;                                    // Team of first entered player, used on the Gunship event
         uint32 m_uiPutricideValveTimer;
@@ -250,6 +302,10 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
         bool m_bHasSpinestalkerLanded;
 
         GuidList m_lDeathwhisperStalkersGuids;
+        GuidList m_lDeathwhisperCultistsGuids;
+        GuidSet m_sDarkfallenCreaturesLowerGuids;
+        GuidSet m_sDarkfallenCreaturesLeftGuids;
+        GuidSet m_sDarkfallenCreaturesRightGuids;
 };
 
 #endif

@@ -18,7 +18,6 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "WorldPacket.h"
 #include "WorldSession.h"
 #include "World.h"
 #include "ObjectMgr.h"
@@ -26,7 +25,6 @@
 #include "PlayerDump.h"
 #include "SpellMgr.h"
 #include "Player.h"
-#include "Opcodes.h"
 #include "GameObject.h"
 #include "Chat.h"
 #include "Log.h"
@@ -2807,7 +2805,7 @@ bool ChatHandler::HandleListItemCommand(char* args)
             uint32 owner_acc = fields[4].GetUInt32();
             std::string owner_name = fields[5].GetCppString();
 
-            char const* item_pos = 0;
+            char const* item_pos;
             if (Player::IsEquipmentPos(item_bag, item_slot))
                 item_pos = "[equipped]";
             else if (Player::IsInventoryPos(item_bag, item_slot))
@@ -4879,34 +4877,6 @@ bool ChatHandler::HandleListAurasCommand(char* /*args*/)
             }
         }
     }
-    for (int i = 0; i < TOTAL_AURAS; ++i)
-    {
-        Unit::AuraList const& uAuraList = unit->GetAurasByType(AuraType(i));
-        if (uAuraList.empty()) continue;
-        PSendSysMessage(LANG_COMMAND_TARGET_LISTAURATYPE, uAuraList.size(), i);
-        for (Unit::AuraList::const_iterator itr = uAuraList.begin(); itr != uAuraList.end(); ++itr)
-        {
-            bool talent = GetTalentSpellCost((*itr)->GetId()) > 0;
-
-            char const* name = (*itr)->GetSpellProto()->SpellName[GetSessionDbcLocale()];
-
-            if (m_session)
-            {
-                std::ostringstream ss_name;
-                ss_name << "|cffffffff|Hspell:" << (*itr)->GetId() << "|h[" << name << "]|h|r";
-
-                PSendSysMessage(LANG_COMMAND_TARGET_AURASIMPLE, (*itr)->GetId(), (*itr)->GetEffIndex(),
-                                ss_name.str().c_str(), ((*itr)->GetHolder()->IsPassive() ? passiveStr : ""), (talent ? talentStr : ""),
-                                (*itr)->GetCasterGuid().GetString().c_str());
-            }
-            else
-            {
-                PSendSysMessage(LANG_COMMAND_TARGET_AURASIMPLE, (*itr)->GetId(), (*itr)->GetEffIndex(),
-                                name, ((*itr)->GetHolder()->IsPassive() ? passiveStr : ""), (talent ? talentStr : ""),
-                                (*itr)->GetCasterGuid().GetString().c_str());
-            }
-        }
-    }
     return true;
 }
 
@@ -6152,7 +6122,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
 
             case CHASE_MOTION_TYPE:
             {
-                Unit* target = nullptr;
+                Unit* target;
                 if (unit->GetTypeId() == TYPEID_PLAYER)
                     target = static_cast<ChaseMovementGenerator<Player> const*>(*itr)->GetTarget();
                 else
@@ -6168,7 +6138,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
             }
             case FOLLOW_MOTION_TYPE:
             {
-                Unit* target = nullptr;
+                Unit* target;
                 if (unit->GetTypeId() == TYPEID_PLAYER)
                     target = static_cast<FollowMovementGenerator<Player> const*>(*itr)->GetTarget();
                 else
@@ -6245,7 +6215,7 @@ bool ChatHandler::HandleServerPLimitCommand(char* args)
 
     uint32 pLimit = sWorld.GetPlayerAmountLimit();
     AccountTypes allowedAccountType = sWorld.GetPlayerSecurityLimit();
-    char const* secName = "";
+    char const* secName;
     switch (allowedAccountType)
     {
         case SEC_PLAYER:        secName = "Player";        break;

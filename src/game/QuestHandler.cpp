@@ -627,8 +627,6 @@ void WorldSession::HandleQuestgiverStatusMultipleQuery(WorldPacket& /*recvPacket
 
     for (GuidSet::const_iterator itr = _player->m_clientGUIDs.begin(); itr != _player->m_clientGUIDs.end(); ++itr)
     {
-        uint8 dialogStatus = DIALOG_STATUS_NONE;
-
         if (itr->IsAnyTypeCreature())
         {
             // need also pet quests case support
@@ -640,7 +638,7 @@ void WorldSession::HandleQuestgiverStatusMultipleQuery(WorldPacket& /*recvPacket
             if (!questgiver->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER))
                 continue;
 
-            dialogStatus = sScriptMgr.GetDialogStatus(_player, questgiver);
+            uint8 dialogStatus = sScriptMgr.GetDialogStatus(_player, questgiver);
 
             if (dialogStatus == DIALOG_STATUS_UNDEFINED)
                 dialogStatus = getDialogStatus(_player, questgiver, DIALOG_STATUS_NONE);
@@ -659,7 +657,7 @@ void WorldSession::HandleQuestgiverStatusMultipleQuery(WorldPacket& /*recvPacket
             if (questgiver->GetGoType() != GAMEOBJECT_TYPE_QUESTGIVER)
                 continue;
 
-            dialogStatus = sScriptMgr.GetDialogStatus(_player, questgiver);
+            uint8 dialogStatus = sScriptMgr.GetDialogStatus(_player, questgiver);
 
             if (dialogStatus == DIALOG_STATUS_UNDEFINED)
                 dialogStatus = getDialogStatus(_player, questgiver, DIALOG_STATUS_NONE);

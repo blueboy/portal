@@ -50,7 +50,6 @@
 #include "Policies/Singleton.h"
 #include "BattleGround/BattleGroundMgr.h"
 #include "OutdoorPvP/OutdoorPvP.h"
-#include "TemporarySummon.h"
 #include "VMapFactory.h"
 #include "MoveMap.h"
 #include "GameEventMgr.h"
@@ -67,6 +66,8 @@
 #include "CreatureLinkingMgr.h"
 #include "Calendar.h"
 #include "Weather.h"
+
+#include <mutex>
 
 INSTANTIATE_SINGLETON_1(World);
 
@@ -88,7 +89,7 @@ float  World::m_relocation_lower_limit_sq     = 10.f * 10.f;
 uint32 World::m_relocation_ai_notify_delay    = 1000u;
 
 /// World constructor
-World::World()
+World::World(): mail_timer(0), mail_timer_expires(0), m_NextMonthlyQuestReset(0)
 {
     m_playerLimit = 0;
     m_allowMovement = true;
@@ -115,31 +116,25 @@ World::World()
 
     for (int i = 0; i < CONFIG_BOOL_VALUE_COUNT; ++i)
         m_configBoolValues[i] = false;
-
-    m_configForceLoadMapIds = nullptr;
 }
 
 /// World destructor
 World::~World()
 {
-    ///- Empty the kicked session set
-    while (!m_sessions.empty())
-    {
-        // not remove from queue, prevent loading new sessions
-        delete m_sessions.begin()->second;
-        m_sessions.erase(m_sessions.begin());
-    }
+    // it is assumed that no other thread is accessing this data when the destructor is called.  therefore, no locks are necessary
 
-    CliCommandHolder* command = nullptr;
-    while (cliCmdQueue.next(command))
-        delete command;
+    ///- Empty the kicked session set
+    for (auto const session : m_sessions)
+        delete session.second;
+
+    for (auto const cliCommand : m_cliCommandQueue)
+        delete cliCommand;
+
+    for (auto const session : m_sessionAddQueue)
+        delete session;
 
     VMAP::VMapFactory::clear();
     MMAP::MMapFactory::clear();
-
-    delete m_configForceLoadMapIds;
-
-    // TODO free addSessQueue
 }
 
 /// Cleanups before world stop
@@ -179,7 +174,9 @@ bool World::RemoveSession(uint32 id)
 
 void World::AddSession(WorldSession* s)
 {
-    addSessQueue.add(s);
+    std::lock_guard<std::mutex> guard(m_sessionAddQueueLock);
+
+    m_sessionAddQueue.push_back(s);
 }
 
 void
@@ -475,15 +472,14 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_CLEAN_CHARACTER_DB, "CleanCharacterDB", true);
     setConfig(CONFIG_BOOL_GRID_UNLOAD, "GridUnload", true);
 
-    std::string forceLoadGridOnMaps = sConfig.GetStringDefault("LoadAllGridsOnMaps", "");
+    std::string forceLoadGridOnMaps = sConfig.GetStringDefault("LoadAllGridsOnMaps");
     if (!forceLoadGridOnMaps.empty())
     {
-        m_configForceLoadMapIds = new std::set<uint32>;
         unsigned int pos = 0;
         unsigned int id;
         VMAP::VMapFactory::chompAndTrim(forceLoadGridOnMaps);
         while (VMAP::VMapFactory::getNextId(forceLoadGridOnMaps, pos, id))
-            m_configForceLoadMapIds->insert(id);
+            m_configForceLoadMapIds.insert(id);
     }
 
     setConfig(CONFIG_UINT32_INTERVAL_SAVE, "PlayerSave.Interval", 15 * MINUTE * IN_MILLISECONDS);
@@ -852,7 +848,7 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK, "vmap.enableIndoorCheck", true);
     bool enableLOS = sConfig.GetBoolDefault("vmap.enableLOS", false);
     bool enableHeight = sConfig.GetBoolDefault("vmap.enableHeight", false);
-    std::string ignoreSpellIds = sConfig.GetStringDefault("vmap.ignoreSpellIds", "");
+    std::string ignoreSpellIds = sConfig.GetStringDefault("vmap.ignoreSpellIds");
 
     if (!enableHeight)
         sLog.outError("VMAP height use disabled! Creatures movements and other things will be in broken state.");
@@ -865,7 +861,7 @@ void World::LoadConfigSettings(bool reload)
     sLog.outString("WORLD: VMap data directory is: %svmaps", m_dataPath.c_str());
 
     setConfig(CONFIG_BOOL_MMAP_ENABLED, "mmap.enabled", true);
-    std::string ignoreMapIds = sConfig.GetStringDefault("mmap.ignoreMapIds", "");
+    std::string ignoreMapIds = sConfig.GetStringDefault("mmap.ignoreMapIds");
     MMAP::MMapFactory::preventPathfindingOnMaps(ignoreMapIds.c_str());
     sLog.outString("WORLD: MMap pathfinding %sabled", getConfig(CONFIG_BOOL_MMAP_ENABLED) ? "en" : "dis");
 
@@ -1730,7 +1726,7 @@ BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, uint32 duration_
     std::string safe_author = author;
     LoginDatabase.escape_string(safe_author);
 
-    QueryResult* resultAccounts = nullptr;                     // used for kicking
+    QueryResult* resultAccounts;                            // used for kicking
 
     ///- Update the database with ban information
     switch (mode)
@@ -1890,7 +1886,7 @@ void World::ShutdownMsg(bool show /*= false*/, Player* player /*= nullptr*/)
 /// Cancel a planned server shutdown
 void World::ShutdownCancel()
 {
-    // nothing cancel or too later
+    // nothing to cancel or too late
     if (!m_ShutdownTimer || m_stopEvent)
         return;
 
@@ -1907,9 +1903,13 @@ void World::ShutdownCancel()
 void World::UpdateSessions(uint32 /*diff*/)
 {
     ///- Add new sessions
-    WorldSession* sess;
-    while (addSessQueue.next(sess))
-        AddSession_(sess);
+    {
+        std::lock_guard<std::mutex> guard(m_sessionAddQueueLock);
+
+        std::for_each(m_sessionAddQueue.begin(), m_sessionAddQueue.end(), [&](WorldSession *session) { AddSession_(session); });
+
+        m_sessionAddQueue.clear();
+    }
 
     ///- Then send an update signal to remaining ones
     for (SessionMap::iterator itr = m_sessions.begin(), next; itr != m_sessions.end(); itr = next)
@@ -1920,11 +1920,12 @@ void World::UpdateSessions(uint32 /*diff*/)
         WorldSession* pSession = itr->second;
         WorldSessionFilter updater(pSession);
 
+        // the session itself is owned by the socket which created it.  that is where the destruction of the session will happen.
         if (!pSession->Update(updater))
         {
             RemoveQueuedSession(pSession);
             m_sessions.erase(itr);
-            delete pSession;
+            pSession->Finalize();
         }
     }
 }
@@ -1932,17 +1933,20 @@ void World::UpdateSessions(uint32 /*diff*/)
 // This handles the issued and queued CLI/RA commands
 void World::ProcessCliCommands()
 {
-    CliCommandHolder* command;
-    while (cliCmdQueue.next(command))
+    std::lock_guard<std::mutex> guard(m_cliCommandQueueLock);
+
+    while (!m_cliCommandQueue.empty())
     {
+        auto const command = m_cliCommandQueue.front();
+        m_cliCommandQueue.pop_front();
+
         DEBUG_LOG("CLI command under processing...");
-        CliCommandHolder::Print* zprint = command->m_print;
-        void* callbackArg = command->m_callbackArg;
-        CliHandler handler(command->m_cliAccountId, command->m_cliAccessLevel, callbackArg, zprint);
-        handler.ParseCommands(command->m_command);
+
+        CliHandler handler(command->m_cliAccountId, command->m_cliAccessLevel, command->m_print);
+        handler.ParseCommands(&command->m_command[0]);
 
         if (command->m_commandFinished)
-            command->m_commandFinished(callbackArg, !handler.HasSentErrorMessage());
+            command->m_commandFinished(!handler.HasSentErrorMessage());
 
         delete command;
     }

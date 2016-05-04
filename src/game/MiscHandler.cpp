@@ -28,8 +28,6 @@
 #include "GuildMgr.h"
 #include "ObjectMgr.h"
 #include "WorldSession.h"
-#include "Auth/BigNumber.h"
-#include "Auth/Sha1.h"
 #include "UpdateData.h"
 #include "Chat.h"
 #include "ScriptMgr.h"
@@ -675,7 +673,7 @@ void WorldSession::HandleResurrectResponseOpcode(WorldPacket& recv_data)
 
     if (status == 0)
     {
-        GetPlayer()->clearResurrectRequestData();           // reject
+        GetPlayer()->ClearResurrectRequestData();           // reject
         return;
     }
 

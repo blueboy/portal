@@ -19,10 +19,8 @@
 #ifndef MANGOS_CALENDAR_H
 #define MANGOS_CALENDAR_H
 
-#include "Policies/Singleton.h"
 #include "Common.h"
 #include "ObjectGuid.h"
-#include "SharedDefines.h"
 
 enum CalendarEventType
 {
@@ -142,18 +140,18 @@ class CalendarEvent
     public:
         CalendarEvent(uint64 eventId, uint64 creatorGUID, uint32 guildId, CalendarEventType type, int32 dungeonId,
                       time_t eventTime, uint32 flags, time_t unknownTime, std::string title, std::string description) :
-            EventId(eventId), CreatorGuid(creatorGUID), GuildId(guildId), Type(type), DungeonId(dungeonId),
+            EventId(eventId), CreatorGuid(creatorGUID), GuildId(guildId), Type(type), Repeatable(), DungeonId(dungeonId),
             EventTime(eventTime), Flags(flags), UnknownTime(unknownTime), Title(title),
             Description(description) { }
 
-        CalendarEvent() : EventId(0), CreatorGuid(uint64(0)), GuildId(0), Type(CALENDAR_TYPE_OTHER), DungeonId(-1), EventTime(0),
+        CalendarEvent() : EventId(0), CreatorGuid(uint64(0)), GuildId(0), Type(CALENDAR_TYPE_OTHER), Repeatable(), DungeonId(-1), EventTime(0),
             Flags(0), UnknownTime(0) { }
 
         ~CalendarEvent();
 
         // helper to test event flag
-        bool IsGuildEvent() const { return Flags & CALENDAR_FLAG_GUILD_EVENT; }
-        bool IsGuildAnnouncement() const { return Flags & CALENDAR_FLAG_GUILD_ANNOUNCEMENT; }
+        bool IsGuildEvent() const { return !!(Flags & CALENDAR_FLAG_GUILD_EVENT); }
+        bool IsGuildAnnouncement() const { return !!(Flags & CALENDAR_FLAG_GUILD_ANNOUNCEMENT); }
 
         bool AddInvite(CalendarInvite* invite);
 

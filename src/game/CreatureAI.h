@@ -19,10 +19,7 @@
 #ifndef MANGOS_CREATUREAI_H
 #define MANGOS_CREATUREAI_H
 
-#include "Common.h"
 #include "Platform/Define.h"
-#include "Policies/Singleton.h"
-#include "Dynamic/ObjectRegistry.h"
 #include "Dynamic/FactoryHolder.h"
 #include "ObjectGuid.h"
 
@@ -46,7 +43,8 @@ enum CanCastResult
     CAST_FAIL_TOO_CLOSE         = 4,
     CAST_FAIL_POWER             = 5,
     CAST_FAIL_STATE             = 6,
-    CAST_FAIL_TARGET_AURA       = 7
+    CAST_FAIL_TARGET_AURA       = 7,
+    CAST_FAIL_NOT_IN_LOS        = 8
 };
 
 enum CastFlags

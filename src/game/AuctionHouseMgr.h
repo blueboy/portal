@@ -20,8 +20,6 @@
 #define _AUCTION_HOUSE_MGR_H
 
 #include "Common.h"
-#include "SharedDefines.h"
-#include "Policies/Singleton.h"
 #include "DBCStructure.h"
 
 class Item;
@@ -120,7 +118,7 @@ class AuctionHouseObject
 
         bool RemoveAuction(uint32 id)
         {
-            return AuctionsMap.erase(id);
+            return AuctionsMap.erase(id) > 0;
         }
 
         void Update();

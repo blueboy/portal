@@ -7,16 +7,18 @@
 
 enum
 {
-    MAX_ENCOUNTER                   = 3,
+    MAX_ENCOUNTER                   = 6,
 
-    TYPE_FALRIC                     = 0,
-    TYPE_MARWYN                     = 1,
-    TYPE_LICH_KING                  = 2,
+    TYPE_FROSTMOURNE_INTRO          = 0,
+    TYPE_FALRIC                     = 1,
+    TYPE_MARWYN                     = 2,
+    TYPE_LICH_KING                  = 3,
+    TYPE_FROSTWORN_GENERAL          = 4,
+    TYPE_QUEL_DELAR                 = 5,
 
     NPC_FALRIC                      = 38112,
     NPC_MARWYN                      = 38113,
     NPC_LICH_KING                   = 36954,
-    NPC_FROSTSWORN_GENERAL          = 36723,                    // miniboss between Marwyn and Lich King
 
     NPC_JAINA_PART1                 = 37221,
     NPC_JAINA_PART2                 = 36955,
@@ -30,8 +32,15 @@ enum
     // intro related npcs
     NPC_UTHER                       = 37225,
     NPC_LICH_KING_INTRO             = 37226,
-    NPC_FROSTMOURNE_ALTER_BUNNY     = 37704,                    // dummy trigger for Quel'Delar
+    NPC_FROSTMOURNE_ALTAR_BUNNY     = 37704,                    // dummy trigger for Quel'Delar
     NPC_QUEL_DELAR                  = 37158,
+    NPC_DUNGEON_TAP_CONTROLLER      = 37071,                    // casts 69843 on all players to maintain dungeon control
+
+    // Frostworn general related
+    NPC_DUNGEON_TRAP_STALKER        = 36736,
+    NPC_FROSTSWORN_GENERAL          = 36723,                    // miniboss between Marwyn and Lich King
+    NPC_SPIRITUAL_REFLECTION_1      = 37068,
+    NPC_SPIRITUAL_REFLECTION_2      = 37107,
 
     // spirit event creatures
     NPC_PHANTOM_MAGE                = 38172,
@@ -57,13 +66,19 @@ enum
     GO_ICE_WALL                     = 201385,                   // summoned during the Lich King escape
     GO_CAVE_IN                      = 201596,                   // door after the final encounter
     GO_PORTAL_DALARAN               = 202079,
-    GO_THE_SKYBREAKER               = 201598,
-    GO_OGRIMS_HAMMER                = 201581,
+    GO_TRANSPORT_SKYBREAKER         = 201598,                   // transport ships used at the end of the event; requires more research
+    GO_TRANSPORT_OGRIMS_HAMMER      = 201599,
+    GO_GUNSHIP_STAIRS               = 201709,
 
     GO_CAPTAIN_CHEST_HORDE          = 202212,
     GO_CAPTAIN_CHEST_HORDE_H        = 202337,
     GO_CAPTAIN_CHEST_ALLIANCE       = 201710,
     GO_CAPTAIN_CHEST_ALLIANCE_H     = 202336,
+
+    // spells
+    SPELL_ICE_PRISON                = 69708,
+    SPELL_DARK_BINDING              = 70194,
+    SPELL_QUELDELAR_COMPULSION      = 70013,
 
     // world states
     WORLD_STATE_SPIRIT_WAVES        = 4884,
@@ -71,14 +86,18 @@ enum
 
     // area triggers
     AREATRIGGER_FROSTMOURNE_ALTAR   = 5697,
+    AREATRIGGER_FROSTWORN_GENERAL   = 5740,
     AREATRIGGER_LICH_KING_ROOM      = 5605,
+    AREATRIGGER_QUELDELAR_START     = 5660,
+
+    // achievs
+    ACHIEV_START_NOT_RETREATING_ID  = 22615,                    // Lich King escape timed achievs 4526
 };
 
 struct EventNpcLocations
 {
     uint32 uiEntryHorde, uiEntryAlliance;
     float fX, fY, fZ, fO;
-    float fMoveX, fMoveY, fMoveZ;
 };
 
 const EventNpcLocations aEventBeginLocations[2] =
@@ -87,7 +106,16 @@ const EventNpcLocations aEventBeginLocations[2] =
     {NPC_LORALEN,        NPC_KORELN,        5232.680f, 1931.460f, 707.7781f, 0.83f},
 };
 
-class instance_halls_of_reflection : public ScriptedInstance
+const EventNpcLocations aEventKingLocations[2] =
+{
+    {NPC_LICH_KING,      NPC_LICH_KING,     5552.930f, 2261.475f, 733.0110f, 3.89f},
+    {NPC_SYLVANAS_PART2, NPC_JAINA_PART2,   5549.290f, 2257.353f, 733.0943f, 0.89f},
+};
+
+static const float afGeneralSpawnLoc[4] = { 5415.538f, 2117.842f, 707.778f, 3.944f };
+static const float afUtherSpawnLoc[4] = {5301.767f, 1990.667f, 707.695f, 3.909f };
+
+class instance_halls_of_reflection : public ScriptedInstance, private DialogueHelper
 {
     public:
         instance_halls_of_reflection(Map* pMap);
@@ -97,6 +125,11 @@ class instance_halls_of_reflection : public ScriptedInstance
 
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
+
+        void OnCreatureDeath(Creature* pCreature) override;
+        void OnCreatureEvade(Creature* pCreature) override;
+        void OnCreatureDespawn(Creature* pCreature) override;
+        void OnCreatureEnterCombat(Creature* pCreature) override;
 
         void OnPlayerEnter(Player* pPlayer) override;
 
@@ -108,11 +141,31 @@ class instance_halls_of_reflection : public ScriptedInstance
         const char* Save() const override { return m_strInstData.c_str(); }
         void Load(const char* chrIn) override;
 
+        void GetDungeonTrapsGUIDList(GuidList& lList) { lList = m_lDungeonTrapsGuids; }
+        void GetReflectionsGUIDList(GuidList& lList) { lList = m_lSpiritReflectionsGuids; }
+
+        void Update(uint32 uiDiff);
+
     protected:
+        void JustDidDialogueStep(int32 iEntry) override;
+        void DoCleanupFrostmourneEvent();
+        void DoSendNextSpiritWave();
+        void DoSetupEscapeEvent(Player* pPlayer);
+
         uint32 m_auiEncounter[MAX_ENCOUNTER];
         std::string m_strInstData;
 
         uint32 m_uiTeam;                                    // Team of first entered player, used to set if Jaina or Silvana to spawn
+        uint32 m_uiEventTimer;
+        uint32 m_uiActivateTimer;
+        uint32 m_uiEscapeResetTimer;
+        uint8 m_uiEventStage;
+
+        GuidList m_lRisenSpiritsGuids;
+        GuidList m_lActiveSpiritsGuids;
+        GuidList m_lDungeonTrapsGuids;
+        GuidList m_lSpiritReflectionsGuids;
+        GuidList m_lIceWallTargetsGuids;
 };
 
 #endif

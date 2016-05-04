@@ -19,14 +19,12 @@
 #define __MANGOS_ACHIEVEMENTMGR_H
 
 #include "Common.h"
-#include "Policies/Singleton.h"
 #include "Database/DatabaseEnv.h"
 #include "DBCEnums.h"
 #include "SharedDefines.h"
 #include "ObjectGuid.h"
 
 #include <map>
-#include <string>
 
 struct AchievementEntry;
 struct AchievementCriteriaEntry;
@@ -298,7 +296,6 @@ class AchievementMgr
         void CompletedAchievement(AchievementEntry const* entry);
         void IncompletedAchievement(AchievementEntry const* entry);
         bool IsCompletedAchievement(AchievementEntry const* entry);
-        void CompleteAchievementsWithRefs(AchievementEntry const* entry);
         void BuildAllDataPacket(WorldPacket* data);
 
         Player* m_player;

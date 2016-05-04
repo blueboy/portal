@@ -25,7 +25,6 @@
 #include "ObjectMgr.h"
 #include "WorldSession.h"
 #include "Object.h"
-#include "Chat.h"
 #include "BattleGroundEY.h"
 #include "BattleGroundMgr.h"
 #include "BattleGroundWS.h"
@@ -522,7 +521,7 @@ void WorldSession::HandleBattlefieldStatusOpcode(WorldPacket& /*recv_data*/)
 
     WorldPacket data;
     // we must update all queues here
-    BattleGround* bg = nullptr;
+    BattleGround* bg;
     for (uint8 i = 0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
     {
         BattleGroundQueueTypeId bgQueueTypeId = _player->GetBattleGroundQueueTypeId(i);
@@ -707,7 +706,7 @@ void WorldSession::HandleBattlemasterJoinArena(WorldPacket& recv_data)
         if (grp->GetLeaderGuid() != _player->GetObjectGuid())
             return;
         // may be Group::CanJoinBattleGroundQueue should be moved to player class...
-        err = grp->CanJoinBattleGroundQueue(bg, bgQueueTypeId, arenatype, arenatype, (bool)isRated, arenaslot);
+        err = grp->CanJoinBattleGroundQueue(bg, bgQueueTypeId, arenatype, arenatype, !!isRated, arenaslot);
     }
 
     uint32 ateamId = 0;
@@ -757,9 +756,9 @@ void WorldSession::HandleBattlemasterJoinArena(WorldPacket& recv_data)
                 DEBUG_LOG("Battleground: arena team id %u, leader %s queued with rating %u for type %u", _player->GetArenaTeamId(arenaslot), _player->GetName(), arenaRating, arenatype);
 
             // set arena rated type to show correct minimap arena icon
-            bg->SetRated(isRated);
+            bg->SetRated(!!isRated);
 
-            GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, grp, bgTypeId, bracketEntry, arenatype, isRated, false, arenaRating, ateamId);
+            GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, grp, bgTypeId, bracketEntry, arenatype, !!isRated, false, arenaRating, ateamId);
             avgTime = bgQueue.GetAverageQueueWaitTime(ginfo, bracketEntry->GetBracketId());
         }
 
@@ -792,7 +791,7 @@ void WorldSession::HandleBattlemasterJoinArena(WorldPacket& recv_data)
     }
     else
     {
-        GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, arenatype, isRated, false, arenaRating, ateamId);
+        GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, arenatype, !!isRated, false, arenaRating, ateamId);
         uint32 avgTime = bgQueue.GetAverageQueueWaitTime(ginfo, bracketEntry->GetBracketId());
         uint32 queueSlot = _player->AddBattleGroundQueueId(bgQueueTypeId);
 

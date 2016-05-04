@@ -19,39 +19,6 @@
 #ifndef MANGOSSERVER_COMMON_H
 #define MANGOSSERVER_COMMON_H
 
-// config.h needs to be included 1st
-#ifdef HAVE_CONFIG_H
-#ifdef PACKAGE
-#undef PACKAGE
-#endif // PACKAGE
-#ifdef PACKAGE_BUGREPORT
-#undef PACKAGE_BUGREPORT
-#endif // PACKAGE_BUGREPORT
-#ifdef PACKAGE_NAME
-#undef PACKAGE_NAME
-#endif // PACKAGE_NAME
-#ifdef PACKAGE_STRING
-#undef PACKAGE_STRING
-#endif // PACKAGE_STRING
-#ifdef PACKAGE_TARNAME
-#undef PACKAGE_TARNAME
-#endif // PACKAGE_TARNAME
-#ifdef PACKAGE_VERSION
-#undef PACKAGE_VERSION
-#endif // PACKAGE_VERSION
-#ifdef VERSION
-#undef VERSION
-#endif // VERSION
-# include "config.h"
-#undef PACKAGE
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_STRING
-#undef PACKAGE_TARNAME
-#undef PACKAGE_VERSION
-#undef VERSION
-#endif // HAVE_CONFIG_H
-
 #include "Platform/Define.h"
 
 #if COMPILER == COMPILER_MICROSOFT
@@ -86,32 +53,7 @@
 #include <unordered_set>
 
 #include "Errors.h"
-#include "LockedQueue.h"
 #include "Threading.h"
-
-#include <ace/OS_NS_arpa_inet.h>
-
-// Old ACE versions (pre-ACE-5.5.4) not have this type (add for allow use at Unix side external old ACE versions)
-#if PLATFORM != PLATFORM_WINDOWS
-#  ifndef ACE_OFF_T
-typedef off_t ACE_OFF_T;
-#  endif
-#endif
-
-#if PLATFORM == PLATFORM_WINDOWS
-#  if !defined (FD_SETSIZE)
-#    define FD_SETSIZE 4096
-#  endif
-#  include <ace/config-all.h>
-#  include <ws2tcpip.h>
-#else
-#  include <sys/types.h>
-#  include <sys/ioctl.h>
-#  include <sys/socket.h>
-#  include <netinet/in.h>
-#  include <unistd.h>
-#  include <netdb.h>
-#endif
 
 #if COMPILER == COMPILER_MICROSOFT
 
@@ -123,6 +65,7 @@ typedef off_t ACE_OFF_T;
 #  define vsnprintf _vsnprintf
 #  define finite(X) _finite(X)
 
+#  pragma warning ( disable : 4251 )
 #else
 
 #  define stricmp strcasecmp
@@ -137,13 +80,18 @@ typedef off_t ACE_OFF_T;
 
 #endif
 
-#define UI64FMTD ACE_UINT64_FORMAT_SPECIFIER
-#define UI64LIT(N) ACE_UINT64_LITERAL(N)
+#define __STDC_FORMAT_MACROS
+#include <cinttypes>
 
-#define SI64FMTD ACE_INT64_FORMAT_SPECIFIER
-#define SI64LIT(N) ACE_INT64_LITERAL(N)
+#define UI64FMTD "%" PRIu64
 
-#define SIZEFMTD ACE_SIZE_T_FORMAT_SPECIFIER
+#define SI64FMTD "%" PRId64
+
+#if COMPILER == COMPILER_MICROSOFT
+#  define SIZEFMTD "%Iu"
+#else
+#  define SIZEFMTD "%zu"
+#endif
 
 inline float finiteAlways(float f) { return std::isfinite(f) ? f : 0.0f; }
 
@@ -151,8 +99,8 @@ inline float finiteAlways(float f) { return std::isfinite(f) ? f : 0.0f; }
 
 // used for creating values for respawn for example
 #define MAKE_PAIR64(l, h)  uint64( uint32(l) | ( uint64(h) << 32 ) )
-#define PAIR64_HIPART(x)   (uint32)((uint64(x) >> 32) & UI64LIT(0x00000000FFFFFFFF))
-#define PAIR64_LOPART(x)   (uint32)(uint64(x)         & UI64LIT(0x00000000FFFFFFFF))
+#define PAIR64_HIPART(x)   (uint32)((uint64(x) >> 32) & uint64(0x00000000FFFFFFFF))
+#define PAIR64_LOPART(x)   (uint32)(uint64(x)         & uint64(0x00000000FFFFFFFF))
 
 #define MAKE_PAIR32(l, h)  uint32( uint16(l) | ( uint32(h) << 16 ) )
 #define PAIR32_HIPART(x)   (uint16)((uint32(x) >> 16) & 0x0000FFFF)

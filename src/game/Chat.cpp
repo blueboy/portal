@@ -27,7 +27,6 @@
 #include "ObjectMgr.h"
 #include "ObjectGuid.h"
 #include "Player.h"
-#include "UpdateMask.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include "AccountMgr.h"
@@ -859,9 +858,10 @@ ChatCommand* ChatHandler::getCommandTable()
     return commandTable;
 }
 
-ChatHandler::ChatHandler(WorldSession* session) : m_session(session) {}
+ChatHandler::ChatHandler(WorldSession* session) : m_session(session), sentErrorMessage(false)
+{}
 
-ChatHandler::ChatHandler(Player* player) : m_session(player->GetSession()) {}
+ChatHandler::ChatHandler(Player* player) : m_session(player->GetSession()), sentErrorMessage(false) {}
 
 ChatHandler::~ChatHandler() {}
 
@@ -2507,7 +2507,6 @@ char* ChatHandler::ExtractLinkArg(char** args, char const* const* linkTypes /*= 
 
     // key:data...|h[name]|h|r
     char* keyStart = tail;                                  // remember key start for return
-    char* keyEnd   = tail;                                  // key end for truncate, will updated
 
     while (*tail && *tail != '|' && *tail != ':')
         ++tail;
@@ -2515,7 +2514,7 @@ char* ChatHandler::ExtractLinkArg(char** args, char const* const* linkTypes /*= 
     if (!*tail)
         return nullptr;
 
-    keyEnd = tail;                                          // remember key end for truncate
+    char* keyEnd = tail;                                    // remember key end for truncate
 
     // |h[name]|h|r or :something...|h[name]|h|r
 
@@ -3400,8 +3399,8 @@ bool CliHandler::isAvailable(ChatCommand const& cmd) const
 
 void CliHandler::SendSysMessage(const char* str)
 {
-    m_print(m_callbackArg, str);
-    m_print(m_callbackArg, "\r\n");
+    m_print(str);
+    m_print("\r\n");
 }
 
 std::string CliHandler::GetNameLink() const
@@ -3516,7 +3515,7 @@ void ChatHandler::BuildChatPacket(WorldPacket& data, ChatMsg msgtype, char const
                                   ObjectGuid const& targetGuid /*= ObjectGuid()*/, char const* targetName /*= nullptr*/,
                                   char const* channelName /*= nullptr*/, uint32 achievementId /*= 0*/)
 {
-    bool isGM = chatTag & CHAT_TAG_GM;
+    const bool isGM = !!(chatTag & CHAT_TAG_GM);
     bool isAchievement = false;
 
     data.Initialize(isGM ? SMSG_GM_MESSAGECHAT : SMSG_MESSAGECHAT);

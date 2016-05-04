@@ -24,6 +24,7 @@
 #include "MovementGenerator.h"
 #include "ScriptMgr.h"
 #include "Pet.h"
+#include "Log.h"
 
 INSTANTIATE_SINGLETON_1(CreatureAIRegistry);
 INSTANTIATE_SINGLETON_1(MovementGeneratorRegistry);
@@ -32,10 +33,17 @@ namespace FactorySelector
 {
     CreatureAI* selectAI(Creature* creature)
     {
-        // Allow scripting AI for normal creatures and not controlled pets (guardians and mini-pets)
-        if ((!creature->IsPet() || !((Pet*)creature)->isControlled()) && !creature->isCharmed())
-            if (CreatureAI* scriptedAI = sScriptMgr.GetCreatureAI(creature))
+        CreatureAI* scriptedAI = sScriptMgr.GetCreatureAI(creature);
+        if (scriptedAI)
+        {
+            // charmed creature may have some script even if its not supposed to be that way (ex: Eye of Acherus)
+            if (creature->isCharmed())
                 return scriptedAI;
+
+            // Allow scripting AI for normal creatures and not controlled pets (guardians and mini-pets)
+            if (!creature->IsPet() || !static_cast<Pet*>(creature)->isControlled())
+                return scriptedAI;
+        }
 
         CreatureAIRegistry& ai_registry(CreatureAIRepository::Instance());
 
@@ -46,9 +54,12 @@ namespace FactorySelector
         // select by NPC flags _first_ - otherwise EventAI might be choosen for pets/totems
         // excplicit check for isControlled() and owner type to allow guardian, mini-pets and pets controlled by NPCs to be scripted by EventAI
         Unit* owner = nullptr;
-        if ((creature->IsPet() && ((Pet*)creature)->isControlled() &&
-                ((owner = creature->GetOwner()) && owner->GetTypeId() == TYPEID_PLAYER)) || creature->isCharmed())
-            ai_factory = ai_registry.GetRegistryItem("PetAI");
+        if (creature->IsPet() && ((Pet*)creature)->isControlled())
+        {
+            Unit* controler = creature->GetOwner() ? creature->GetOwner() : creature->GetCharmer();
+            if (controler && controler->GetTypeId() == TYPEID_PLAYER && controler->isAlive())
+                ai_factory = ai_registry.GetRegistryItem("PetAI");
+        }
         else if (creature->IsTotem())
             ai_factory = ai_registry.GetRegistryItem("TotemAI");
 

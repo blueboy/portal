@@ -45,8 +45,6 @@
 
 #include "Policies/Singleton.h"
 
-#include <mutex>
-
 INSTANTIATE_SINGLETON_1(BattleGroundMgr);
 
 /*********************************************************/
@@ -1127,7 +1125,7 @@ void BGQueueRemoveEvent::Abort(uint64 /*e_time*/)
 /***            BATTLEGROUND MANAGER                   ***/
 /*********************************************************/
 
-BattleGroundMgr::BattleGroundMgr() : m_AutoDistributionTimeChecker(0), m_ArenaTesting(false)
+BattleGroundMgr::BattleGroundMgr() : m_NextAutoDistributionTime(0), m_AutoDistributionTimeChecker(0), m_ArenaTesting(false)
 {
     for (uint8 i = BATTLEGROUND_TYPE_NONE; i < MAX_BATTLEGROUND_TYPE_ID; ++i)
         m_BattleGrounds[i].clear();
@@ -1498,7 +1496,7 @@ BattleGround* BattleGroundMgr::CreateNewBattleGround(BattleGroundTypeId bgTypeId
         }
     }
 
-    BattleGround* bg = nullptr;
+    BattleGround* bg;
     // create a copy of the BG template
     switch (bgTypeId)
     {
@@ -1543,7 +1541,7 @@ BattleGround* BattleGroundMgr::CreateNewBattleGround(BattleGroundTypeId bgTypeId
             break;
         default:
             // error, but it is handled few lines above
-            return 0;
+            return nullptr;
     }
 
     // set before Map creating for let use proper difficulty
@@ -1569,7 +1567,7 @@ BattleGround* BattleGroundMgr::CreateNewBattleGround(BattleGroundTypeId bgTypeId
 uint32 BattleGroundMgr::CreateBattleGround(BattleGroundTypeId bgTypeId, bool IsArena, uint32 MinPlayersPerTeam, uint32 MaxPlayersPerTeam, uint32 LevelMin, uint32 LevelMax, char const* BattleGroundName, uint32 MapID, float Team1StartLocX, float Team1StartLocY, float Team1StartLocZ, float Team1StartLocO, float Team2StartLocX, float Team2StartLocY, float Team2StartLocZ, float Team2StartLocO, float StartMaxDist)
 {
     // Create the BG
-    BattleGround* bg = nullptr;
+    BattleGround* bg;
     switch (bgTypeId)
     {
         case BATTLEGROUND_AV: bg = new BattleGroundAV; break;

@@ -122,7 +122,6 @@ void WorldSession::HandleCalendarGetCalendar(WorldPacket& /*recv_data*/)
     {
         uint32 map_diff_pair = itr->first;
         uint32 mapId = PAIR32_LOPART(map_diff_pair);
-        Difficulty difficulty = Difficulty(PAIR32_HIPART(map_diff_pair));
         MapDifficultyEntry const* mapDiff = itr->second;
 
         // skip mapDiff without global reset time
@@ -451,7 +450,7 @@ void WorldSession::HandleCalendarEventInvite(WorldPacket& recv_data)
             result = CharacterDatabase.PQuery("SELECT flags FROM character_social WHERE guid = %u AND friend = %u", inviteeGuid.GetCounter(), playerGuid.GetCounter());
             if (result)
             {
-                Field* fields = result->Fetch();
+                fields = result->Fetch();
                 if (fields[0].GetUInt8() & SOCIAL_FLAG_IGNORED)
                     isIgnored = true;
                 delete result;
@@ -584,7 +583,7 @@ void WorldSession::HandleCalendarEventRemoveInvite(WorldPacket& recv_data)
     DEBUG_FILTER_LOG(LOG_FILTER_CALENDAR, "EventId [" UI64FMTD "], ownerInviteId [" UI64FMTD "], Invitee ([%s] id: [" UI64FMTD "])",
                      eventId, ownerInviteId, invitee.GetString().c_str(), inviteId);
 
-    if (CalendarEvent* event = sCalendarMgr.GetEventById(eventId))
+    if (sCalendarMgr.GetEventById(eventId))
         sCalendarMgr.RemoveInvite(eventId, inviteId, guid);
     else
         sCalendarMgr.SendCalendarCommandResult(_player, CALENDAR_ERROR_EVENT_INVALID);

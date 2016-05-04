@@ -41,11 +41,8 @@
 #include "CreatureAI.h"
 #include "ObjectMgr.h"
 #include "SQLStorages.h"
-#include "Util.h"
 #include "movement/MoveSplineInit.h"
-#include "movement/MoveSpline.h"
 #include "MapManager.h"
-#include "TemporarySummon.h"
 
 void ObjectMgr::LoadVehicleAccessory()
 {
@@ -155,6 +152,9 @@ void VehicleInfo::Initialize()
         pVehicle->m_movementInfo.AddMovementFlags2(MOVEFLAG2_ALLOW_PITCHING);
     if (vehicleFlags & VEHICLE_FLAG_FULLSPEEDPITCHING)
         pVehicle->m_movementInfo.AddMovementFlags2(MOVEFLAG2_FULLSPEEDPITCHING);
+
+    if (vehicleFlags & VEHICLE_FLAG_FIXED_POSITION)
+        pVehicle->SetRoot(true);
 
     // Initialize power type based on DBC values (creatures only)
     if (pVehicle->GetTypeId() == TYPEID_UNIT)
@@ -396,10 +396,10 @@ bool VehicleInfo::CanBoard(Unit* passenger) const
 
     // Check for empty player seats
     if (passenger->GetTypeId() == TYPEID_PLAYER)
-        return GetEmptySeatsMask() & m_playerSeats;
+        return !!(GetEmptySeatsMask() & m_playerSeats);
 
     // Check for empty creature seats
-    return GetEmptySeatsMask() & m_creatureSeats;
+    return !!(GetEmptySeatsMask() & m_creatureSeats);
 }
 
 Unit* VehicleInfo::GetPassenger(uint8 seat) const

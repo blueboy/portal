@@ -120,7 +120,7 @@ bool Guild::Create(Player* leader, std::string gname)
     MOTD = "No message set.";
     m_GuildBankMoney = 0;
     m_Id = sObjectMgr.GenerateGuildId();
-    m_CreatedDate = time(0);
+    m_CreatedDate = time(nullptr);
 
     DEBUG_LOG("GUILD: creating guild %s to leader: %s", gname.c_str(), m_LeaderGuid.GetString().c_str());
 
@@ -1656,7 +1656,7 @@ void Guild::LogBankEvent(uint8 EventType, uint8 TabId, uint32 PlayerGuidLow, uin
 
     // add new event to the end of event list
     uint32 currentTabId = TabId;
-    uint32 currentLogGuid = 0;
+    uint32 currentLogGuid;
     if (NewEvent.isMoneyEvent())
     {
         m_GuildBankEventLogNextGuid_Money = (m_GuildBankEventLogNextGuid_Money + 1) % sWorld.getConfig(CONFIG_UINT32_GUILD_BANK_EVENT_LOG_COUNT);

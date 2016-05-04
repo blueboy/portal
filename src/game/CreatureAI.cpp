@@ -54,6 +54,9 @@ CanCastResult CreatureAI::CanCastSpell(Unit* pTarget, const SpellEntry* pSpell, 
         // Check for power (also done by Spell::CheckCast())
         if (m_creature->GetPower((Powers)pSpell->powerType) < Spell::CalculatePowerCost(pSpell, m_creature))
             return CAST_FAIL_POWER;
+
+        if (!m_creature->IsWithinLOSInMap(pTarget) && m_creature != pTarget)
+            return CAST_FAIL_NOT_IN_LOS;
     }
 
     if (const SpellRangeEntry* pSpellRange = sSpellRangeStore.LookupEntry(pSpell->rangeIndex))
@@ -100,7 +103,7 @@ CanCastResult CreatureAI::DoCastSpellIfCan(Unit* pTarget, uint32 uiSpell, uint32
             // Check if cannot cast spell
             if (!(uiCastFlags & (CAST_FORCE_TARGET_SELF | CAST_FORCE_CAST)))
             {
-                CanCastResult castResult = CanCastSpell(pTarget, pSpell, uiCastFlags & CAST_TRIGGERED);
+                CanCastResult castResult = CanCastSpell(pTarget, pSpell, !!(uiCastFlags & CAST_TRIGGERED));
 
                 if (castResult != CAST_OK)
                     return castResult;
@@ -110,7 +113,10 @@ CanCastResult CreatureAI::DoCastSpellIfCan(Unit* pTarget, uint32 uiSpell, uint32
             if (uiCastFlags & CAST_INTERRUPT_PREVIOUS && pCaster->IsNonMeleeSpellCasted(false))
                 pCaster->InterruptNonMeleeSpells(false);
 
-            pCaster->CastSpell(pTarget, pSpell, uiCastFlags & CAST_TRIGGERED, nullptr, nullptr, uiOriginalCasterGUID);
+            // Creature should always stop before it will cast a new spell
+            pCaster->StopMoving();
+
+            pCaster->CastSpell(pTarget, pSpell, !!(uiCastFlags & CAST_TRIGGERED), nullptr, nullptr, uiOriginalCasterGUID);
             return CAST_OK;
         }
         else
