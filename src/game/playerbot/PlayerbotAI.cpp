@@ -852,7 +852,7 @@ bool PlayerbotAI::ItemStatComparison(const ItemPrototype *pProto, const ItemProt
         // melee only stats (warrior/rogue) or stats that only apply to melee style combat
         if (itemmod == ITEM_MOD_HEALTH || itemmod == ITEM_MOD_AGILITY || itemmod == ITEM_MOD_STRENGTH ||
             itemmod == ITEM_MOD_DEFENSE_SKILL_RATING || itemmod == ITEM_MOD_DODGE_RATING || itemmod == ITEM_MOD_PARRY_RATING ||
-            itemmod == ITEM_MOD_BLOCK_RATING ||	itemmod == ITEM_MOD_HIT_MELEE_RATING || itemmod == ITEM_MOD_CRIT_MELEE_RATING ||
+            itemmod == ITEM_MOD_BLOCK_RATING || itemmod == ITEM_MOD_HIT_MELEE_RATING || itemmod == ITEM_MOD_CRIT_MELEE_RATING ||
             itemmod == ITEM_MOD_HIT_TAKEN_MELEE_RATING || itemmod == ITEM_MOD_HIT_TAKEN_RANGED_RATING ||itemmod == ITEM_MOD_HIT_TAKEN_SPELL_RATING ||
             itemmod == ITEM_MOD_CRIT_TAKEN_MELEE_RATING || itemmod == ITEM_MOD_CRIT_TAKEN_RANGED_RATING ||
             itemmod == ITEM_MOD_CRIT_TAKEN_SPELL_RATING || itemmod == ITEM_MOD_HASTE_MELEE_RATING ||
@@ -957,7 +957,7 @@ bool PlayerbotAI::ItemStatComparison(const ItemPrototype *pProto, const ItemProt
         // stats which aren't strictly caster or melee (hybrid perhaps or style dependant)
         if (itemmod == ITEM_MOD_HIT_RATING || itemmod == ITEM_MOD_CRIT_RATING ||
             itemmod == ITEM_MOD_RESILIENCE_RATING || itemmod == ITEM_MOD_HASTE_RATING || itemmod == ITEM_MOD_EXPERTISE_RATING ||
-            itemmod == ITEM_MOD_ARMOR_PENETRATION_RATING || itemmod == ITEM_MOD_HEALTH_REGEN ||	itemmod == ITEM_MOD_STAMINA ||
+            itemmod == ITEM_MOD_ARMOR_PENETRATION_RATING || itemmod == ITEM_MOD_HEALTH_REGEN || itemmod == ITEM_MOD_STAMINA ||
             itemmod2 == ITEM_MOD_HIT_RATING || itemmod2 == ITEM_MOD_CRIT_RATING || itemmod2 == ITEM_MOD_RESILIENCE_RATING ||
             itemmod2 == ITEM_MOD_HASTE_RATING || itemmod2 == ITEM_MOD_EXPERTISE_RATING || itemmod2 == ITEM_MOD_ARMOR_PENETRATION_RATING ||
             itemmod2 == ITEM_MOD_HEALTH_REGEN || itemmod2 == ITEM_MOD_STAMINA)
@@ -2279,53 +2279,70 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             WorldPacket p(packet); // (8+1+4+1+1+4+4+4+4+4+1)
             ObjectGuid guid;
             uint8 loot_type;
-            uint32 gold;
-            uint8 items;
 
             p >> guid;      // 8 corpse guid
             p >> loot_type; // 1 loot type
-            p >> gold;      // 4 money on corpse
-            p >> items;     // 1 number of items on corpse
 
-            if (gold > 0)
+            // Create the loot object and check it exists
+            Loot* loot = sLootMgr.GetLoot(m_bot, guid);
+            if (!loot)
             {
-                WorldPacket* const packet = new WorldPacket(CMSG_LOOT_MONEY, 0);
-                m_bot->GetSession()->QueuePacket(packet);
+                sLog.outError("PLAYERBOT Debug Error cannot get loot object info in SMSG_LOOT_RESPONSE!");
+                return;
             }
 
-            for (uint8 i = 0; i < items; ++i)
+            // Pickup money
+            if (loot->GetGoldAmount())
+                loot->SendGold(m_bot);
+
+            // Pick up the items
+            // Get the list of items first and iterate it
+            LootItemList lootList;
+            loot->GetLootItemsListFor(m_bot, lootList);
+
+            for (LootItemList::const_iterator lootItr = lootList.begin(); lootItr != lootList.end(); ++lootItr)
             {
-                uint32 itemid;
-                uint32 itemcount;
-                uint8 lootslot_type;
-                uint8 itemindex;
+                LootItem* lootItem = *lootItr;
 
-                p >> itemindex;         // 1 counter
-                p >> itemid;            // 4 itemid
-                p >> itemcount;         // 4 item stack count
-                p.read_skip<uint32>();  // 4 item model
-                p.read_skip<uint32>();  // 4 randomSuffix
-                p.read_skip<uint32>();  // 4 randomPropertyId
-                p >> lootslot_type;     // 1 LootSlotType
-
-                if (lootslot_type != LOOT_SLOT_NORMAL && lootslot_type != LOOT_SLOT_OWNER)
+                // Skip non lootable items
+                if (lootItem->GetSlotTypeForSharedLoot(m_bot, loot) != LOOT_SLOT_NORMAL)
                     continue;
 
-                // skinning or collect loot flag = just auto loot everything for getting object
-                // corpse = run checks
-                if (loot_type == LOOT_SKINNING || HasCollectFlag(COLLECT_FLAG_LOOT) ||
-                    (loot_type == LOOT_CORPSE && (IsInQuestItemList(itemid) || IsItemUseful(itemid))))
+                // If bot is skinning or has collect all orders: autostore all items
+                // else bot has order to only loot quest or useful items
+                if (loot_type == LOOT_SKINNING || HasCollectFlag(COLLECT_FLAG_LOOT) || (loot_type == LOOT_CORPSE && (IsInQuestItemList(lootItem->itemId) || IsItemUseful(lootItem->itemId))))
                 {
-                    WorldPacket* const packet = new WorldPacket(CMSG_AUTOSTORE_LOOT_ITEM, 1);
-                    *packet << itemindex;
-                    m_bot->GetSession()->QueuePacket(packet);
+                    // item may be blocked by roll system or already looted or another cheating possibility
+                    if (lootItem->isBlocked || lootItem->GetSlotTypeForSharedLoot(m_bot, loot) == MAX_LOOT_SLOT_TYPE)
+                    {
+                        sLog.outError("PLAYERBOT debug Bot %s have no right to loot itemId(%u)", m_bot->GetGuidStr().c_str(), lootItem->itemId);
+                            continue;
+                    }
+
+                    // Try to send the item to bot
+                    InventoryResult result = loot->SendItem(m_bot, lootItem);
+
+                    // If inventory is full: release loot
+                    if (result == EQUIP_ERR_INVENTORY_FULL)
+                    {
+                        loot->Release(m_bot);
+                        return;
+                    }
+
+                    ObjectGuid const& lguid = loot->GetLootGuid();
+
+                    // Check that bot has either equiped or received the item
+                    // then change item's loot state
+                    if (result == EQUIP_ERR_OK && lguid.IsItem())
+                    {
+                        if (Item* item = m_bot->GetItemByGuid(lguid))
+                        item->SetLootState(ITEM_LOOT_CHANGED);
+                    }
                 }
             }
 
             // release loot
-            WorldPacket* const packet = new WorldPacket(CMSG_LOOT_RELEASE, 8);
-            *packet << guid;
-            m_bot->GetSession()->QueuePacket(packet);
+            loot->Release(m_bot);
 
             return;
         }
@@ -2395,11 +2412,11 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             p.read_skip<uint8>();    // rollnumber related to SMSG_LOOT_ROLL
             p.read_skip<uint8>();    // Rolltype related to SMSG_LOOT_ROLL
 
-			Loot* loot = sLootMgr.GetLoot(m_bot, co_guid);
-			
-			if (!loot)
-				return;
-			
+            Loot* loot = sLootMgr.GetLoot(m_bot, co_guid);
+            
+            if (!loot)
+                return;
+            
             // Clean up: remove target guid from (ignore list)
             for (std::list<ObjectGuid>::iterator itr = m_being_rolled_on.begin(); itr != m_being_rolled_on.end();)
                 if (co_guid == *itr)
@@ -8565,7 +8582,7 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
     if (text.empty()                                   ||
         text.find("X-Perl")      != std::wstring::npos ||
         text.find("HealBot")     != std::wstring::npos ||
-        text.find("HealComm")    != std::wstring::npos ||   // "HealComm	99990094"
+        text.find("HealComm")    != std::wstring::npos ||   // "HealComm    99990094"
         text.find("LOOT_OPENED") != std::wstring::npos ||
         text.find("CTRA")        != std::wstring::npos ||
         text.find("GathX")       == 0)                      // Gatherer
