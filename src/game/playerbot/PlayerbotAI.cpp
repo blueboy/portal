@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
 #include "../ItemPrototype.h"
