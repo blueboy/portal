@@ -148,9 +148,6 @@ CreatureEventAI::CreatureEventAI(Creature* c) : CreatureAI(c),
     }
     else
         sLog.outErrorEventAI("EventMap for Creature %u is empty but creature is using CreatureEventAI.", m_creature->GetEntry());
-
-    // Handle Spawned Events, also calls Reset()
-    JustRespawned();
 }
 
 #define LOG_PROCESS_EVENT                                                                                                       \
@@ -830,7 +827,14 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             m_creature->DoFleeToGetAssistance();
             break;
         case ACTION_T_QUEST_EVENT_ALL:
-            if (pActionInvoker && pActionInvoker->GetTypeId() == TYPEID_PLAYER)
+            if (action.quest_event_all.useThreatList)
+            {
+                ThreatList const& threatList = m_creature->getThreatManager().getThreatList();
+                for (ThreatList::const_iterator i = threatList.begin(); i != threatList.end(); ++i)
+                    if (Player* temp = m_creature->GetMap()->GetPlayer((*i)->getUnitGuid()))
+                        temp->GroupEventHappens(action.quest_event_all.questId, m_creature);
+            }
+            else if (pActionInvoker && pActionInvoker->GetTypeId() == TYPEID_PLAYER)
                 ((Player*)pActionInvoker)->GroupEventHappens(action.quest_event_all.questId, m_creature);
             break;
         case ACTION_T_CAST_EVENT_ALL:
@@ -1367,11 +1371,18 @@ void CreatureEventAI::UpdateAI(const uint32 diff)
         // Update creature dynamic movement position before doing anything else
         if (m_DynamicMovement)
         {
-            if (!m_creature->hasUnitState(UNIT_STAT_CAN_NOT_REACT) && !m_creature->IsNonMeleeSpellCasted(false))
+            if (!m_creature->hasUnitState(UNIT_STAT_CAN_NOT_REACT))
             {
-                if (m_LastSpellMaxRange && m_creature->IsInRange(m_creature->getVictim(), 0, (m_LastSpellMaxRange / 1.5f)))
-                    SetCombatMovement(false, true);
-                else
+                bool uiInLineOfSight = m_creature->IsWithinLOSInMap(m_creature->getVictim());
+                
+                if (uiInLineOfSight && !m_creature->IsNonMeleeSpellCasted(false))
+                {
+                    if (m_LastSpellMaxRange && m_creature->IsInRange(m_creature->getVictim(), 0, (m_LastSpellMaxRange / 1.5f)))
+                        SetCombatMovement(false, true);
+                    else
+                        SetCombatMovement(true, true);
+                }
+                else if (!uiInLineOfSight)
                     SetCombatMovement(true, true);
             }
         }

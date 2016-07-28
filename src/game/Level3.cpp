@@ -4504,9 +4504,37 @@ bool ChatHandler::HandleLevelUpCommand(char* args)
         }
     }
 
-    Player* target;
     ObjectGuid target_guid;
     std::string target_name;
+
+    //add pet to levelup command
+    if (m_session)
+    {
+        Creature* creatureTarget = getSelectedCreature();
+        Player* player = m_session->GetPlayer();
+        if (creatureTarget && creatureTarget->IsPet() && creatureTarget->GetOwner() && creatureTarget->GetOwner()->GetTypeId() == TYPEID_PLAYER)
+        {
+            Pet* petTarget = (Pet*)creatureTarget;
+
+            if (petTarget->getPetType() == HUNTER_PET)
+            {
+                uint32 newPetLevel = petTarget->getLevel() + addlevel;
+
+                if (newPetLevel <= player->getLevel())
+                {
+                    petTarget->GivePetLevel(newPetLevel);
+
+                    std::string nameLink = petLink(petTarget->GetName());
+                    PSendSysMessage(LANG_YOU_CHANGE_LVL, nameLink.c_str(), newPetLevel);
+                    return true;
+                }
+            }
+ 
+            return false;
+        }
+    }
+
+    Player* target;
     if (!ExtractPlayerTarget(&nameStr, &target, &target_guid, &target_name))
         return false;
 
@@ -5109,7 +5137,7 @@ bool ChatHandler::HandleResetTalentsCommand(char* args)
         if (!*args && creature && creature->IsPet())
         {
             Unit* owner = creature->GetOwner();
-            if (owner && owner->GetTypeId() == TYPEID_PLAYER && ((Pet*)creature)->IsPermanentPetFor((Player*)owner))
+            if (owner && owner->GetTypeId() == TYPEID_PLAYER && ((Pet*)creature)->isControlled())
             {
                 ((Pet*)creature)->resetTalents(true);
                 ((Player*)owner)->SendTalentsInfoData(true);

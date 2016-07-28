@@ -27,6 +27,7 @@ go_gauntlet_gate
 go_stratholme_postbox
 mob_restless_soul
 mobs_spectral_ghostly_citizen
+npc_aurius
 EndContentData */
 
 #include "precompiled.h"
@@ -307,6 +308,57 @@ CreatureAI* GetAI_mobs_spectral_ghostly_citizen(Creature* pCreature)
     return new mobs_spectral_ghostly_citizenAI(pCreature);
 }
 
+/*######
+## npc_aurius
+######*/
+
+enum
+{
+    GOSSIP_TEXT_AURIUS_1  = 3755,
+    GOSSIP_TEXT_AURIUS_2  = 3756,
+    GOSSIP_TEXT_AURIUS_3  = 3757,
+};
+
+bool QuestRewarded_npc_aurius(Player* pPlayer, Creature* pCreature, const Quest* pQuest)
+{
+    ScriptedInstance* pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
+
+    if (!pInstance)
+        return false;
+
+    if (pInstance->GetData(TYPE_BARON) == DONE || pInstance->GetData(TYPE_AURIUS) == DONE)
+        return false;
+
+    if ((pQuest->GetQuestId() == QUEST_MEDALLION_FAITH))
+        pInstance->SetData(TYPE_AURIUS, DONE);
+
+    return true;
+}
+
+bool GossipHello_npc_aurius(Player* pPlayer, Creature* pCreature)
+{
+    ScriptedInstance* pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
+    if (!pInstance)
+        return false;
+
+    if (pCreature->isQuestGiver())
+        pPlayer->PrepareQuestMenu(pCreature->GetObjectGuid());
+
+    uint32 uiGossipId;
+
+    // Baron encounter is complete and Aurius helped
+    if (pInstance->GetData(TYPE_BARON) == DONE && pInstance->GetData(TYPE_AURIUS) == DONE)
+        uiGossipId = GOSSIP_TEXT_AURIUS_3;
+    // Aurius rewarded the quest
+    else if (pInstance->GetData(TYPE_AURIUS) == DONE)
+        uiGossipId = GOSSIP_TEXT_AURIUS_2;
+    else
+        uiGossipId = GOSSIP_TEXT_AURIUS_1;
+
+    pPlayer->SEND_GOSSIP_MENU(uiGossipId, pCreature->GetObjectGuid());
+    return true;
+}
+
 void AddSC_stratholme()
 {
     Script* pNewScript;
@@ -334,5 +386,11 @@ void AddSC_stratholme()
     pNewScript = new Script;
     pNewScript->Name = "mobs_spectral_ghostly_citizen";
     pNewScript->GetAI = &GetAI_mobs_spectral_ghostly_citizen;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "npc_aurius";
+    pNewScript->pGossipHello =  &GossipHello_npc_aurius;
+    pNewScript->pQuestRewardedNPC = &QuestRewarded_npc_aurius;
     pNewScript->RegisterSelf();
 }

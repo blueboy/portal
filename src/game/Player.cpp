@@ -2224,6 +2224,9 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
     if (!guid || !IsInWorld() || IsTaxiFlying())
         return nullptr;
 
+    // set player as interacting
+    DoInteraction(guid);
+
     // not in interactive state
     if (hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
         return nullptr;
@@ -2265,11 +2268,14 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
     return unit;
 }
 
-GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameobject_type) const
+GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameobject_type)
 {
     // some basic checks
     if (!guid || !IsInWorld() || IsTaxiFlying())
         return nullptr;
+
+    // set player as interacting
+    DoInteraction(guid);
 
     // not in interactive state
     if (hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
@@ -2535,11 +2541,13 @@ void Player::GiveLevel(uint32 level)
     if (level == getLevel())
         return;
 
+    uint32 plClass = getClass();
+
     PlayerLevelInfo info;
-    sObjectMgr.GetPlayerLevelInfo(getRace(), getClass(), level, &info);
+    sObjectMgr.GetPlayerLevelInfo(getRace(), plClass, level, &info);
 
     PlayerClassLevelInfo classInfo;
-    sObjectMgr.GetPlayerClassLevelInfo(getClass(), level, &classInfo);
+    sObjectMgr.GetPlayerClassLevelInfo(plClass, level, &classInfo);
 
     // send levelup info to client
     WorldPacket data(SMSG_LEVELUP_INFO, (4 + 4 + MAX_POWERS * 4 + MAX_STATS * 4));
@@ -2590,8 +2598,6 @@ void Player::GiveLevel(uint32 level)
     SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
     if (GetPower(POWER_RAGE) > GetMaxPower(POWER_RAGE))
         SetPower(POWER_RAGE, GetMaxPower(POWER_RAGE));
-    SetPower(POWER_FOCUS, 0);
-    SetPower(POWER_HAPPINESS, 0);
 
     _ApplyAllLevelScaleItemMods(true);
 
@@ -2654,13 +2660,16 @@ void Player::InitStatsForLevel(bool reapplyMods)
         _RemoveAllStatBonuses();
 
     PlayerClassLevelInfo classInfo;
-    sObjectMgr.GetPlayerClassLevelInfo(getClass(), getLevel(), &classInfo);
+
+    uint32 level = getLevel();
+    uint32 plClass = getClass();
+    sObjectMgr.GetPlayerClassLevelInfo(plClass, level, &classInfo);
 
     PlayerLevelInfo info;
-    sObjectMgr.GetPlayerLevelInfo(getRace(), getClass(), getLevel(), &info);
+    sObjectMgr.GetPlayerLevelInfo(getRace(), plClass, level, &info);
 
     SetUInt32Value(PLAYER_FIELD_MAX_LEVEL, sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
-    SetUInt32Value(PLAYER_NEXT_LEVEL_XP, sObjectMgr.GetXPForLevel(getLevel()));
+    SetUInt32Value(PLAYER_NEXT_LEVEL_XP, sObjectMgr.GetXPForLevel(level));
 
     // reset before any aura state sources (health set/aura apply)
     SetUInt32Value(UNIT_FIELD_AURASTATE, 0);
@@ -2797,8 +2806,6 @@ void Player::InitStatsForLevel(bool reapplyMods)
     SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
     if (GetPower(POWER_RAGE) > GetMaxPower(POWER_RAGE))
         SetPower(POWER_RAGE, GetMaxPower(POWER_RAGE));
-    SetPower(POWER_FOCUS, 0);
-    SetPower(POWER_HAPPINESS, 0);
     SetPower(POWER_RUNIC_POWER, 0);
 
     // update level to hunter/summon pet
@@ -7930,7 +7937,7 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
         spell->m_CastItem = item;
         spell->m_cast_count = cast_count;                   // set count of casts
         spell->m_currentBasePoints[EFFECT_INDEX_0] = learning_spell_id;
-        spell->prepare(&targets);
+        spell->SpellStart(&targets);
         return;
     }
 
@@ -7961,7 +7968,7 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
         spell->m_CastItem = item;
         spell->m_cast_count = cast_count;                   // set count of casts
         spell->m_glyphIndex = glyphIndex;                   // glyph index
-        spell->prepare(&targets);
+        spell->SpellStart(&targets);
 
         ++count;
     }
@@ -7990,7 +7997,7 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
             spell->m_CastItem = item;
             spell->m_cast_count = cast_count;               // set count of casts
             spell->m_glyphIndex = glyphIndex;               // glyph index
-            spell->prepare(&targets);
+            spell->SpellStart(&targets);
 
             ++count;
         }
@@ -10248,6 +10255,10 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
                     return EQUIP_ERR_CANT_DO_RIGHT_NOW;     // maybe exist better err
 
                 if (IsNonMeleeSpellCasted(false))
+                    return EQUIP_ERR_CANT_DO_RIGHT_NOW;
+
+                // prevent equip item in Spirit of Redemption (Aura: 27827)
+                if (HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION))
                     return EQUIP_ERR_CANT_DO_RIGHT_NOW;
             }
 
@@ -18188,7 +18199,7 @@ void Player::PetSpellInitialize()
     uint8 addlist = 0;
     data << uint8(addlist);                                 // placeholder
 
-    if (pet->IsPermanentPetFor(this))
+    if (pet->isControlled())
     {
         // spells loop
         for (PetSpellMap::const_iterator itr = pet->m_spells.begin(); itr != pet->m_spells.end(); ++itr)
@@ -20739,7 +20750,7 @@ bool Player::isHonorOrXPTarget(Unit* pVictim) const
     {
         if (((Creature*)pVictim)->IsTotem() ||
                 ((Creature*)pVictim)->IsPet() ||
-                ((Creature*)pVictim)->GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_NO_XP_AT_KILL)
+                ((Creature*)pVictim)->GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_NO_XP_AT_KILL)
             return false;
     }
     return true;
@@ -20888,6 +20899,24 @@ void Player::SetClientControl(Unit* target, uint8 allowMove)
     GetSession()->SendPacket(&data);
 }
 
+void Player::Uncharm()
+{
+    if (Unit* charm = GetCharm())
+    {
+        charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_CHARM);
+        charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_POSSESS);
+        charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_POSSESS_PET);
+        if (charm == GetMover())
+        {
+            SetMover(nullptr);
+            GetCamera().ResetView();
+            RemoveSpellsCausingAura(SPELL_AURA_MOD_INVISIBILITY);
+            SetCharm(nullptr);
+            SetClientControl(this, 1);
+        }
+    }
+}
+
 void Player::UpdateZoneDependentAuras()
 {
     // Some spells applied at enter into zone (with subzones), aura removed in UpdateAreaDependentAuras that called always at zone->area update
@@ -20922,7 +20951,7 @@ struct UpdateZoneDependentPetsHelper
     explicit UpdateZoneDependentPetsHelper(Player* _owner, uint32 zone, uint32 area) : owner(_owner), zone_id(zone), area_id(area) {}
     void operator()(Unit* unit) const
     {
-        if (unit->GetTypeId() == TYPEID_UNIT && ((Creature*)unit)->IsPet() && !((Pet*)unit)->IsPermanentPetFor(owner))
+        if (unit->GetTypeId() == TYPEID_UNIT && ((Creature*)unit)->IsPet() && !((Pet*)unit)->isControlled())
             if (uint32 spell_id = unit->GetUInt32Value(UNIT_CREATED_BY_SPELL))
                 if (SpellEntry const* spellEntry = sSpellStore.LookupEntry(spell_id))
                     if (sSpellMgr.GetSpellAllowedInLocationError(spellEntry, owner->GetMapId(), zone_id, area_id, owner) != SPELL_CAST_OK)
@@ -21753,7 +21782,7 @@ void Player::HandleFall(MovementInfo const& movementInfo)
     // 14.57 can be calculated by resolving damageperc formula below to 0
     if (z_diff >= 14.57f && !isDead() && !isGameMaster() && !HasMovementFlag(MOVEFLAG_ONTRANSPORT) &&
             !HasAuraType(SPELL_AURA_HOVER) && !HasAuraType(SPELL_AURA_FEATHER_FALL) &&
-            !HasAuraType(SPELL_AURA_FLY) && !IsImmunedToDamage(SPELL_SCHOOL_MASK_NORMAL))
+            !HasAuraType(SPELL_AURA_FLY) && !IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL))
     {
         // Safe fall, fall height reduction
         int32 safe_fall = GetTotalAuraModifier(SPELL_AURA_SAFE_FALL);
@@ -22067,6 +22096,15 @@ void Player::UnsummonPetTemporaryIfAny()
         m_temporaryUnsummonedPetNumber = pet->GetCharmInfo()->GetPetNumber();
 
     pet->Unsummon(PET_SAVE_AS_CURRENT, this);
+}
+
+void Player::UnsummonPetIfAny()
+{
+    Pet* pet = GetPet();
+    if (!pet)
+        return;
+ 
+    pet->Unsummon(PET_SAVE_NOT_IN_SLOT, this);
 }
 
 void Player::ResummonPetTemporaryUnSummonedIfAny()
@@ -23200,3 +23238,18 @@ void Player::ClearResurrectRequestData()
     m_resurrectToGhoul = false;
 }
 
+// player is interacting so we have to remove non authorized aura
+void Player::DoInteraction(ObjectGuid const& interactObjGuid)
+{
+    if (interactObjGuid.IsUnit())
+    {
+        // remove some aura like stealth aura
+        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TALK);
+    }
+    else if (interactObjGuid.IsGameObject())
+    {
+        // remove some aura like stealth aura
+        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_USE);
+    }
+    SendForcedObjectUpdate();
+}

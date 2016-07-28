@@ -706,6 +706,7 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
                 case 46650:                                 // Open Brutallus Back Door
                 case 62488:                                 // Activate Construct
                 case 64503:                                 // Water
+                case 69782:                                 // Ooze Flood
                     return true;
                 default:
                     break;
@@ -734,7 +735,9 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
                     switch (spellproto->Id)
                     {
                         case 13139:                         // net-o-matic special effect
+                        case 23182:                         // Mark of Frost
                         case 23445:                         // evil twin
+                        case 25040:                         // Mark of Nature
                         case 35679:                         // Protectorate Demolitionist
                         case 37695:                         // Stanky
                         case 38637:                         // Nether Exhaustion (red)
@@ -742,6 +745,7 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
                         case 38639:                         // Nether Exhaustion (blue)
                         case 11196:                         // Recently Bandaged
                         case 44689:                         // Relay Race Accept Hidden Debuff - DND
+                        case 44877:                         // Living Flare Master
                         case 58600:                         // Restricted Flight Area
                             return false;
                         // some spells have unclear target modes for selection, so just make effect positive
@@ -753,6 +757,7 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
                         case 27203:
                         case 47669:
                         case 64996:                         // Reorigination
+                        case 70346:                         // Slime Puddle
                             return true;
                         default:
                             break;
@@ -838,6 +843,8 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
                         return false;
                     break;
                 case SPELL_AURA_MOD_DECREASE_SPEED:         // used in positive spells also
+                    if (spellproto->Id == 37830)            // Repolarized Magneto Sphere
+                        return true;
                     // part of positive spell if casted at self
                     if ((spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF ||
                             spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF2) &&
@@ -2141,6 +2148,21 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
 
                     // Halls of Reflection Clone
                     if (spellInfo_1->SpellIconID == 692 && spellInfo_2->SpellIconID == 692)
+                        return false;
+
+                    // Large Ooze Combine and Large Ooze Buff Combine
+                    if ((spellInfo_1->Id == 69552 && spellInfo_2->Id == 69611) ||
+                            (spellInfo_2->Id == 69552 && spellInfo_1->Id == 69611))
+                        return false;
+
+                    // Slime Puddle and Grow Stacker
+                    if ((spellInfo_1->Id == 70343 && spellInfo_2->Id == 70345) ||
+                            (spellInfo_2->Id == 70343 && spellInfo_1->Id == 70345))
+                        return false;
+
+                    // Choking Gas Bomb Periodic Trigger and Choking Gas Bomb Periodic Explosion Trigger
+                    if ((spellInfo_1->Id == 71259 && spellInfo_2->Id == 71280) ||
+                            (spellInfo_2->Id == 71259 && spellInfo_1->Id == 71280))
                         return false;
                     break;
                 }

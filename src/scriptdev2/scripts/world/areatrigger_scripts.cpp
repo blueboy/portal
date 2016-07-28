@@ -17,7 +17,7 @@
 /* ScriptData
 SDName: Areatrigger_Scripts
 SD%Complete: 100
-SDComment: Quest support: 4291, 6681, 7632, 10589/10604, 11686, 12548, 12575, 12741, 13315/13351, 24849/24851.
+SDComment: Quest support: 4291, 6681, 7632, 10280, 10589/10604, 11686, 12548, 12575, 12741, 13315/13351, 24849/24851.
 SDCategory: Areatrigger
 EndScriptData */
 
@@ -34,6 +34,7 @@ at_scent_larkorwi               1726,1727,1728,1729,1730,1731,1732,1733,1734,173
 at_murkdeep                     1966
 at_hot_on_the_trail             5710, 5711, 5712, 5714, 5715, 5716
 at_ancient_leaf                 3587
+at_haramad_teleport             4479
 EndContentData */
 
 #include "precompiled.h"
@@ -412,6 +413,25 @@ bool AreaTrigger_at_ancient_leaf(Player* pPlayer, AreaTriggerEntry const* pAt)
     return false;
 }
 
+/*######
+## at_haramad_teleport
+######*/
+
+enum
+{
+    QUEST_SPECIAL_DELIVERY_TO_SHATTRATH = 10280
+};
+
+static const WorldLocation haramadTeleportDest(530, -1810.465f, 5323.083f, -12.428f, 2.040f);
+
+bool AreaTrigger_at_haramad_teleport(Player* pPlayer, AreaTriggerEntry const* /*pAt*/)
+{
+    if (pPlayer->IsCurrentQuest(QUEST_SPECIAL_DELIVERY_TO_SHATTRATH))
+        pPlayer->TeleportTo(haramadTeleportDest);
+
+    return false;
+}
+
 void AddSC_areatrigger_scripts()
 {
     Script* pNewScript;
@@ -479,5 +499,10 @@ void AddSC_areatrigger_scripts()
     pNewScript = new Script;
     pNewScript->Name = "at_ancient_leaf";
     pNewScript->pAreaTrigger = &AreaTrigger_at_ancient_leaf;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "at_haramad_teleport";
+    pNewScript->pAreaTrigger = &AreaTrigger_at_haramad_teleport;
     pNewScript->RegisterSelf();
 }

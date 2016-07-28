@@ -1055,7 +1055,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SendInstanceResetWarning(uint32 mapid, Difficulty difficulty, uint32 time);
 
         Creature* GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask);
-        GameObject* GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameobject_type = MAX_GAMEOBJECT_TYPE) const;
+        GameObject* GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameobject_type = MAX_GAMEOBJECT_TYPE);
 
         void ToggleAFK();
         void ToggleDND();
@@ -1130,6 +1130,11 @@ class MANGOS_DLL_SPEC Player : public Unit
         **/
         float ComputeRest(time_t timePassed, bool offline = false, bool inRestPlace = false);
 
+        /**
+        * \brief: player is interacting with something.
+        * \param: ObjectGuid interactObj > object that interact with this player
+        **/
+        void DoInteraction(ObjectGuid const& interactObjGuid);
         RestType GetRestType() const { return rest_type; }
         void SetRestType(RestType n_r_type, uint32 areaTriggerId = 0);
 
@@ -2185,6 +2190,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SetMover(Unit* target) { m_mover = target ? target : this; }
         Unit* GetMover() const { return m_mover; }
         bool IsSelfMover() const { return m_mover == this; }// normal case for player not controlling other unit
+        void Uncharm() override;
 
         ObjectGuid const& GetFarSightGuid() const { return GetGuidValue(PLAYER_FARSIGHT); }
 
@@ -2246,6 +2252,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint32 GetTemporaryUnsummonedPetNumber() const { return m_temporaryUnsummonedPetNumber; }
         void SetTemporaryUnsummonedPetNumber(uint32 petnumber) { m_temporaryUnsummonedPetNumber = petnumber; }
         void UnsummonPetTemporaryIfAny();
+        void UnsummonPetIfAny();
         void ResummonPetTemporaryUnSummonedIfAny();
         bool IsPetNeedBeTemporaryUnsummoned() const { return !IsInWorld() || !isAlive() || IsMounted() /*+in flight*/; }
 

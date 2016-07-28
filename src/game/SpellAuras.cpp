@@ -359,7 +359,7 @@ pAuraHandler AuraHandler[TOTAL_AURAS] =
     &Aura::HandleNoImmediateEffect,                         //300 SPELL_AURA_SHARE_DAMAGE_PCT 9 spells
     &Aura::HandleNULL,                                      //301 SPELL_AURA_HEAL_ABSORB 5 spells
     &Aura::HandleUnused,                                    //302 unused (3.2.2a)
-    &Aura::HandleNULL,                                      //303 17 spells
+    &Aura::HandleNoImmediateEffect,                         //303 SPELL_AURA_DAMAGE_DONE_VERSUS_AURA_STATE_PCT - 17 spells implemented in Unit::*DamageBonus
     &Aura::HandleAuraFakeInebriation,                       //304 SPELL_AURA_FAKE_INEBRIATE
     &Aura::HandleAuraModIncreaseSpeed,                      //305 SPELL_AURA_MOD_MINIMUM_SPEED
     &Aura::HandleNULL,                                      //306 1 spell
@@ -1441,8 +1441,9 @@ void Aura::TriggerSpell()
                         triggerTarget->SummonCreature(17870, 0.0f, 0.0f, 0.0f, triggerTarget->GetOrientation(), TEMPSUMMON_DEAD_DESPAWN, 0);
                         return;
                     }
-//                    // Bloodmyst Tesla
-//                    case 31611: break;
+                    case 31611:                             // Bloodmyst Tesla
+                        // no custom effect required; return to avoid spamming with errors
+                        return;
                     case 31944:                             // Doomfire
                     {
                         int32 damage = m_modifier.m_amount * ((GetAuraDuration() + m_modifier.periodictime) / GetAuraMaxDuration());
@@ -1798,6 +1799,9 @@ void Aura::TriggerSpell()
 //                    case 71110: break;
 //                    // Aura of Darkness
 //                    case 71111: break;
+                    case 71441:                             // Unstable Ooze Explosion Suicide Trigger
+                        target->DealDamage(target, target->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                        return;
 //                    // Ball of Flames Visual
 //                    case 71706: break;
 //                    // Summon Broken Frostmourne
@@ -2897,6 +2901,22 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 target->CastSpell(target, 68848, true, nullptr, this);
                 // Draw Corrupted Soul
                 target->CastSpell(target, 68846, true, nullptr, this);
+                return;
+            }
+            case 70308:                                     // Mutated Transformation
+            {
+                if (target->GetMap()->IsDungeon())
+                {
+                    uint32 spellId;
+
+                    Difficulty diff = target->GetMap()->GetDifficulty();
+                    if (diff == RAID_DIFFICULTY_10MAN_NORMAL || diff == RAID_DIFFICULTY_10MAN_HEROIC)
+                        spellId = 70311;
+                    else
+                        spellId = 71503;
+
+                    target->CastSpell(target, spellId, true, nullptr, this);
+                }
                 return;
             }
         }
@@ -4182,7 +4202,18 @@ void Aura::HandleModPossess(bool apply, bool Real)
         return;
 
     if (apply)
+    {
+        if (caster->GetTypeId() == TYPEID_PLAYER)
+        {
+            //remove any existing charm just in case
+            caster->Uncharm();
+
+            //pets should be removed when possesing a target if somehow check was bypassed
+            ((Player*)caster)->UnsummonPetIfAny();
+        }
+
         caster->TakePossessOf(target);
+    }
     else
         caster->ResetControlState();
 }
@@ -4207,6 +4238,15 @@ void Aura::HandleModPossessPet(bool apply, bool Real)
 
     if (apply)
     {
+        if (caster->GetTypeId() == TYPEID_PLAYER)
+        {
+            //remove any existing charm just in case
+            caster->Uncharm();
+
+            //pets should be removed when possesing a target if somehow check was bypassed
+            ((Player*)caster)->UnsummonPetIfAny();
+        }
+
         pet->StopMoving();
         pet->GetMotionMaster()->Clear(false);
         pet->GetMotionMaster()->MoveIdle();
@@ -4244,6 +4284,15 @@ void Aura::HandleModCharm(bool apply, bool Real)
 
     if (apply)
     {
+        if (caster->GetTypeId() == TYPEID_PLAYER)
+        {
+            //remove any existing charm just in case
+            caster->Uncharm();
+ 
+            //pets should be removed when possesing a target if somehow check was bypassed
+            ((Player*)caster)->UnsummonPetIfAny();
+        }
+
         // is it really need after spell check checks?
         target->RemoveSpellsCausingAura(SPELL_AURA_MOD_CHARM, GetHolder());
         target->RemoveSpellsCausingAura(SPELL_AURA_MOD_POSSESS, GetHolder());
@@ -4642,8 +4691,11 @@ void Aura::HandleInvisibility(bool apply, bool Real)
 
         if (Real && target->GetTypeId() == TYPEID_PLAYER)
         {
-            // apply glow vision
-            target->SetByteFlag(PLAYER_FIELD_BYTES2, 3, PLAYER_FIELD_BYTE2_INVISIBILITY_GLOW);
+            if (((Player*)target)->GetMover() == nullptr) // check if the player doesnt have a mover, when player is hidden during MC of creature
+                {
+                    // apply glow vision
+                    target->SetByteFlag(PLAYER_FIELD_BYTES2, 1, PLAYER_FIELD_BYTE2_INVISIBILITY_GLOW);
+                }
         }
 
         // apply only if not in GM invisibility and not stealth
@@ -5266,6 +5318,19 @@ void Aura::HandlePeriodicTriggerSpell(bool apply, bool /*Real*/)
                         pCaster->CastSpell(target, GetSpellProto()->EffectTriggerSpell[GetEffIndex()], true, nullptr, this);
                 }
 
+                return;
+            case 70405:                                     // Mutated Transformation (10n)
+            case 72508:                                     // Mutated Transformation (25n)
+            case 72509:                                     // Mutated Transformation (10h)
+            case 72510:                                     // Mutated Transformation (25h)
+                if (m_removeMode == AURA_REMOVE_BY_DEFAULT)
+                {
+                    if (target->IsVehicle() && target->GetTypeId() == TYPEID_UNIT)
+                    {
+                        target->RemoveSpellsCausingAura(SPELL_AURA_CONTROL_VEHICLE);
+                        ((Creature*)target)->ForcedDespawn();
+                    }
+                }
                 return;
             default:
                 break;
@@ -6980,7 +7045,13 @@ void Aura::HandleSpiritOfRedemption(bool apply, bool Real)
                 target->SetStandState(UNIT_STAND_STATE_STAND);
         }
 
-        target->SetHealth(1);
+        // interrupt casting when entering Spirit of Redemption
+        if (target->IsNonMeleeSpellCasted(false))
+            target->InterruptNonMeleeSpells(false);
+
+        // set health and mana to maximum
+        target->SetHealth(target->GetMaxHealth());
+        target->SetPower(POWER_MANA, target->GetMaxPower(POWER_MANA));
     }
     // die at aura end
     else
@@ -7156,7 +7227,7 @@ void Aura::PeriodicTick()
                 return;
 
             // Check for immune (not use charges)
-            if (target->IsImmunedToDamage(GetSpellSchoolMask(spellProto)))
+            if (target->IsImmuneToDamage(GetSpellSchoolMask(spellProto)))
                 return;
 
             // some auras remove at specific health level or more
@@ -7313,7 +7384,7 @@ void Aura::PeriodicTick()
                 return;
 
             // Check for immune
-            if (target->IsImmunedToDamage(GetSpellSchoolMask(spellProto)))
+            if (target->IsImmuneToDamage(GetSpellSchoolMask(spellProto)))
                 return;
 
             uint32 absorb = 0;
@@ -7521,7 +7592,7 @@ void Aura::PeriodicTick()
                 return;
 
             // Check for immune (not use charges)
-            if (target->IsImmunedToDamage(GetSpellSchoolMask(spellProto)))
+            if (target->IsImmuneToDamage(GetSpellSchoolMask(spellProto)))
                 return;
 
             // ignore non positive values (can be result apply spellmods to aura damage
@@ -7677,7 +7748,7 @@ void Aura::PeriodicTick()
                 return;
 
             // Check for immune (not use charges)
-            if (target->IsImmunedToDamage(GetSpellSchoolMask(spellProto)))
+            if (target->IsImmuneToDamage(GetSpellSchoolMask(spellProto)))
                 return;
 
             int32 pdamage = m_modifier.m_amount > 0 ? m_modifier.m_amount : 0;
@@ -8242,6 +8313,11 @@ void Aura::PeriodicDummyTick()
 
                     // Should actually be SMSG_SPELL_START, too
                     target->CastSpell(target, 68873, true);
+                    return;
+                }
+                case 70069:                                 // Ooze Flood Periodic Trigger
+                {
+                    target->CastSpell(target, GetSpellProto()->CalculateSimpleValue(m_effIndex), true);
                     return;
                 }
 // Exist more after, need add later
@@ -8947,6 +9023,7 @@ SpellAuraHolder::SpellAuraHolder(SpellEntry const* spellproto, Unit* target, Wor
         case 63050:                                         // Sanity
         case 64455:                                         // Feral Essence
         case 65294:                                         // Empowered
+        case 70672:                                         // Gaseous Bloat
         case 71564:                                         // Deadly Precision
         case 74396:                                         // Fingers of Frost
             m_stackAmount = m_spellProto->StackAmount;

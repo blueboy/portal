@@ -1113,10 +1113,10 @@ enum AuraState
     AURA_STATE_DEADLY_POISON                = 16,           //   T |
     AURA_STATE_ENRAGE                       = 17,           // C   |
     AURA_STATE_BLEEDING                     = 18,           // C  t|
-    // AURA_STATE_UNKNOWN19                  = 19,          //     | not used
+    AURA_STATE_DARK_TARGET                  = 19,           //     | targeting for light/Gas spells (ToC & ICC)
     // AURA_STATE_UNKNOWN20                  = 20,          //  c  | only (45317 Suicide)
     // AURA_STATE_UNKNOWN21                  = 21,          //     | not used
-    // AURA_STATE_UNKNOWN22                  = 22,          // C   | not implemented yet (Requires Evasive Charges to use)
+    AURA_STATE_LIGHT_TARGET                 = 22,           //     | targeting for dark/Ooze spells (ToC & ICC)
     AURA_STATE_HEALTH_ABOVE_75_PERCENT      = 23,           // C   |
 };
 
@@ -1320,7 +1320,7 @@ enum Targets
     TARGET_91                          = 91,
     TARGET_SUMMONER                    = 92,
     TARGET_CONTROLLED_VEHICLE          = 94,
-    TARGET_95                          = 95,
+    TARGET_VEHICLE_DRIVER              = 95,
     TARGET_VEHICLE_PASSENGER_0         = 96,
     TARGET_VEHICLE_PASSENGER_1         = 97,
     TARGET_VEHICLE_PASSENGER_2         = 98,

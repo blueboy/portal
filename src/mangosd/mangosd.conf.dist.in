@@ -206,6 +206,11 @@ SD2ErrorLogFile = "SD2Errors.log"
 #        Default: 1 (Enable)
 #                 0 (Disabled)
 #
+#
+#    MaxWhoListReturns
+#        Set the max number of players returned in the /who list and interface (0 means unlimited)
+#        Default:     49 - (stable)
+#
 ###################################################################################################################
 
 UseProcessors = 0
@@ -234,6 +239,7 @@ UpdateUptimeInterval = 10
 MaxCoreStuckTime = 0
 AddonChannel = 1
 CleanCharacterDB = 1
+MaxWhoListReturns = 49
 
 ###################################################################################################################
 # SERVER LOGGING
@@ -751,8 +757,8 @@ LogColors = ""
 #
 #    PetUnsummonAtMount
 #        Persmanent pet will unsummoned at player mount
-#                 0 - unsummon only for flying mounts
-#        Default: 1 - unsummon for any mount
+#        Default: 0 - unsummon only when appropriate (don't unsummon temp summons on ground mounting)
+#                 1 - always unsummon controlled pets on mounting
 #
 #    ClientCacheVersion
 #        Client cache version for client cache data reset. Use any different from DB value and not recently used for triggering reset.
@@ -856,7 +862,7 @@ MassMailer.SendPerTick = 10
 SkillChance.Prospecting = 0
 SkillChance.Milling = 0
 OffhandCheckAtTalentsReset = 0
-PetUnsummonAtMount = 1
+PetUnsummonAtMount = 0
 ClientCacheVersion = 0
 Event.Announce = 0
 BeepAtStart = 1
@@ -1277,10 +1283,12 @@ Visibility.AIRelocationNotifyDelay = 1000
 #    Rate.Drop.Item.Legendary
 #    Rate.Drop.Item.Artifact
 #    Rate.Drop.Item.Referenced
+#    Rate.Drop.Item.Quest
 #    Rate.Drop.Money
 #         Drop rates (items by quality and money)
 #         Default: 1
 #
+#    Rate.Pet.XP.Kill
 #    Rate.XP.Kill
 #    Rate.XP.Quest
 #    Rate.XP.Explore
@@ -1425,7 +1433,9 @@ Rate.Drop.Item.Epic = 1
 Rate.Drop.Item.Legendary = 1
 Rate.Drop.Item.Artifact = 1
 Rate.Drop.Item.Referenced = 1
+Rate.Drop.Item.Quest = 1
 Rate.Drop.Money = 1
+Rate.Pet.XP.Kill = 1
 Rate.XP.Kill    = 1
 Rate.XP.Quest   = 1
 Rate.XP.Explore = 1

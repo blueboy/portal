@@ -171,7 +171,7 @@ void Creature::AddToWorld()
     Unit::AddToWorld();
 
     // Make active if required
-    if (sWorld.isForceLoadMap(GetMapId()) || (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
+    if (sWorld.isForceLoadMap(GetMapId()) || (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_ACTIVE))
         SetActiveObjectState(true);
 }
 
@@ -184,14 +184,16 @@ void Creature::RemoveFromWorld()
     Unit::RemoveFromWorld();
 }
 
-void Creature::RemoveCorpse()
+void Creature::RemoveCorpse(bool inPlace)
 {
-    // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
-    if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(GetGUIDLow()))
-        sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
-
-    if (!IsInWorld())                                       // can be despawned by update pool
-        return;
+    if (!inPlace)
+    {
+        // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
+        if (uint16 poolid = sPoolMgr.IsPartOfAPool<Creature>(GetGUIDLow()))
+            sPoolMgr.UpdatePool<Creature>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
+        if (!IsInWorld())                            // can be despawned by update pool
+            return;
+    }
 
     if ((getDeathState() != CORPSE && !m_isDeadByDefault) || (getDeathState() != ALIVE && m_isDeadByDefault))
         return;
@@ -345,7 +347,7 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
 
     // check if we need to add swimming movement. TODO: i thing movement flags should be computed automatically at each movement of creature so we need a sort of UpdateMovementFlags() method
     if (cinfo->InhabitType & INHABIT_WATER &&               // check inhabit type water
-            !(cinfo->ExtraFlags & CREATURE_FLAG_EXTRA_WALK_IN_WATER) &&  // check if creature is forced to walk (crabs, giant,...)
+            !(cinfo->ExtraFlags & CREATURE_EXTRA_FLAG_WALK_IN_WATER) &&  // check if creature is forced to walk (crabs, giant,...)
             data &&                                         // check if there is data to get creature spawn pos
             GetMap()->GetTerrain()->IsSwimmable(data->posX, data->posY, data->posZ, minfo->bounding_radius))  // check if creature is in water and have enough space to swim
         m_movementInfo.AddMovementFlag(MOVEFLAG_SWIMMING);  // add swimming movement
@@ -392,7 +394,7 @@ bool Creature::UpdateEntry(uint32 Entry, Team team, const CreatureData* data /*=
     if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT))
         unitFlags |= UNIT_FLAG_IN_COMBAT;
 
-    if (m_movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) && (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_HAVE_NO_SWIM_ANIMATION) == 0)
+    if (m_movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) && (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_HAVE_NO_SWIM_ANIMATION) == 0)
         unitFlags |= UNIT_FLAG_UNK_15;
     else
         unitFlags &= ~UNIT_FLAG_UNK_15;
@@ -450,30 +452,39 @@ uint32 Creature::ChooseDisplayId(const CreatureInfo* cinfo, const CreatureData* 
     if (data && data->modelid_override)
         return data->modelid_override;
 
-    // use defaults from the template model id 1
-    uint32 display_id = cinfo->ModelId[0];
+    // use defaults from the template
+    uint32 display_id = 0;
 
     // models may be categorized as (in this order):
     // if mod4 && mod3 && mod2 && mod1  use any, by 25%-chance (other gender is selected and replaced after this function)
-    // if mod3 && mod2 && mod1          use mod1 unless mod3 has modelid_alt_model (then all by 33%-chance)
-    // if mod2                          use mod1 unless mod2 has modelid_alt_model (then both by 50%-chance)
+    // if mod3 && mod2 && mod1          use mod3 unless mod2 has modelid_alt_model (then all by 33%-chance)
+    // if mod2                          use mod2 unless mod2 has modelid_alt_model (then both by 50%-chance)
     // if mod1                          use mod1
 
+    // The follow decision tree needs to be updated if MAX_CREATURE_MODEL is changed.
+    static_assert(MAX_CREATURE_MODEL == 4, "Need to update model selection code for new or removed model fields");
+
     // model selected here may be replaced with other_gender using own function
-    // We use this to eliminate invisible models vs. "dummy" models (infernals, etc).
-    // Where it's expected to select one of two, model must have a alternative model defined (alternative model is normally the same as defined in ModelId1).
-    // Same pattern is used in the above model selection, but the result may be ModelId3 and not ModelId2 as here.
-    if (sObjectMgr.GetCreatureModelAlternativeModel(display_id))
+    if (cinfo->ModelId[3] && cinfo->ModelId[2] && cinfo->ModelId[1] && cinfo->ModelId[0])
     {
-        uint32 alternativeId = 0;
-        for (uint32 i = 1; i < MAX_CREATURE_MODEL - 1; ++i)
-        {
-            if (cinfo->ModelId[i])
-                ++alternativeId;
-            else
-                break;
-        }
-        display_id = cinfo->ModelId[urand(0, alternativeId)];
+        display_id = cinfo->ModelId[urand(0, 3)];
+    }
+    else if (cinfo->ModelId[2] && cinfo->ModelId[1] && cinfo->ModelId[0])
+    {
+        uint32 modelid_tmp = sObjectMgr.GetCreatureModelAlternativeModel(cinfo->ModelId[1]);
+        display_id = modelid_tmp ? cinfo->ModelId[urand(0, 2)] : cinfo->ModelId[2];
+    }
+    else if (cinfo->ModelId[1])
+    {
+        // We use this to eliminate invisible models vs. "dummy" models (infernals, etc).
+        // Where it's expected to select one of two, model must have a alternative model defined (alternative model is normally the same as defined in ModelId1).
+        // Same pattern is used in the above model selection, but the result may be ModelId3 and not ModelId2 as here.
+        uint32 modelid_tmp = sObjectMgr.GetCreatureModelAlternativeModel(cinfo->ModelId[1]);
+        display_id = modelid_tmp ? cinfo->ModelId[urand(0, 1)] : cinfo->ModelId[1];
+    }
+    else if (cinfo->ModelId[0])
+    {
+        display_id = cinfo->ModelId[0];
     }
 
     // fail safe, we use creature entry 1 and make error
@@ -766,6 +777,9 @@ bool Creature::AIM_Initialize()
     i_motionMaster.Initialize();
     i_AI = FactorySelector::selectAI(this);
     delete oldAI;
+
+    // Handle Spawned Events, also calls Reset()
+    i_AI->JustRespawned();
     return true;
 }
 
@@ -1688,7 +1702,7 @@ void Creature::ForcedDespawn(uint32 timeMSToDespawn)
     if (isAlive())
         SetDeathState(JUST_DIED);
 
-    RemoveCorpse();
+    RemoveCorpse(true);                                     // force corpse removal in the same grid
 
     SetHealth(0);                                           // just for nice GM-mode view
 }
@@ -1698,10 +1712,24 @@ bool Creature::IsImmuneToSpell(SpellEntry const* spellInfo, bool castOnSelf)
     if (!spellInfo)
         return false;
 
-    if (!castOnSelf && GetCreatureInfo()->MechanicImmuneMask & (1 << (spellInfo->Mechanic - 1)))
-        return true;
+    if (!castOnSelf)
+    {
+        if (GetCreatureInfo()->MechanicImmuneMask & (1 << (spellInfo->Mechanic - 1)))
+            return true;
+        
+        if (GetCreatureInfo()->SchoolImmuneMask & spellInfo->SchoolMask)
+            return true;
+    }
 
     return Unit::IsImmuneToSpell(spellInfo, castOnSelf);
+}
+
+bool Creature::IsImmuneToDamage(SpellSchoolMask meleeSchoolMask)
+{
+    if (GetCreatureInfo()->SchoolImmuneMask & meleeSchoolMask)
+        return true;
+
+    return Unit::IsImmuneToDamage(meleeSchoolMask);
 }
 
 bool Creature::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const
@@ -1710,7 +1738,7 @@ bool Creature::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectInd
         return true;
 
     // Taunt immunity special flag check
-    if (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_NOT_TAUNTABLE)
+    if (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_NOT_TAUNTABLE)
     {
         // Taunt aura apply check
         if (spellInfo->Effect[index] == SPELL_EFFECT_APPLY_AURA)
@@ -1833,7 +1861,7 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
     if (pl->isGameMaster())
         return true;
 
-    if (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_INVISIBLE)
+    if (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_INVISIBLE)
         return false;
 
     // Live player (or with not release body see live creatures or death creatures with corpse disappearing time > 0
@@ -1881,7 +1909,7 @@ void Creature::CallAssistance()
     {
         SetNoCallAssistance(true);
 
-        if (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_NO_CALL_ASSIST)
+        if (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_NO_CALL_ASSIST)
             return;
 
         AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, getVictim(), sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
@@ -2000,8 +2028,9 @@ bool Creature::IsOutOfThreatArea(Unit* pVictim) const
 
 CreatureDataAddon const* Creature::GetCreatureAddon() const
 {
-    if (CreatureDataAddon const* addon = ObjectMgr::GetCreatureAddon(GetGUIDLow()))
-        return addon;
+    if (!(GetObjectGuid().GetHigh() == HIGHGUID_PET)) // pets have guidlow that is conflicting with normal guidlows hence GetGUIDLow() gives wrong info
+        if (CreatureDataAddon const* addon = ObjectMgr::GetCreatureAddon(GetGUIDLow()))
+            return addon;
 
     // dependent from difficulty mode entry
     if (GetEntry() != GetCreatureInfo()->Entry)
