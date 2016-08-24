@@ -326,7 +326,6 @@ void Log::outTimestamp(FILE* file)
 
 void Log::outTime()
 {
-    std::lock_guard<std::mutex> guard(m_worldLogMtx);
     time_t t = time(nullptr);
     tm* aTm = localtime(&t);
     //       YYYY   year
@@ -889,7 +888,7 @@ void Log::outErrorScriptLib(const char* err, ...)
     fflush(stderr);
 }
 
-void Log::outWorldPacketDump(uint32 socket, uint32 opcode, char const* opcodeName, ByteBuffer const* packet, bool incoming)
+void Log::outWorldPacketDump(const char* socket, uint32 opcode, char const* opcodeName, ByteBuffer const* packet, bool incoming)
 {
     if (!worldLogfile)
         return;
@@ -898,7 +897,7 @@ void Log::outWorldPacketDump(uint32 socket, uint32 opcode, char const* opcodeNam
 
     outTimestamp(worldLogfile);
 
-    fprintf(worldLogfile, "\n%s:\nSOCKET: %u\nLENGTH: %u\nOPCODE: %s (0x%.4X)\nDATA:\n",
+    fprintf(worldLogfile, "\n%s:\nSOCKET: %s\nLENGTH: %u\nOPCODE: %s (0x%.4X)\nDATA:\n",
             incoming ? "CLIENT" : "SERVER",
             socket, static_cast<uint32>(packet->size()), opcodeName, opcode);
 

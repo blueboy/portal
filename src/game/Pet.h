@@ -192,6 +192,7 @@ class MANGOS_DLL_SPEC Pet : public Creature
         bool HaveInDiet(ItemPrototype const* item) const;
         uint32 GetCurrentFoodBenefitLevel(uint32 itemlevel);
         void SetDuration(int32 dur) { m_duration = dur; }
+        int32 GetDuration() { return m_duration; }
 
         int32 GetBonusDamage() { return m_bonusdamage; }
         void SetBonusDamage(int32 damage) { m_bonusdamage = damage; }
@@ -235,12 +236,8 @@ class MANGOS_DLL_SPEC Pet : public Creature
 
         bool m_retreating;
 
+        void SetIsRetreating(bool retreating = false) { m_retreating = retreating; }
         bool GetIsRetreating() { return m_retreating; }
-        void SetIsRetreating(bool retreating = false)
-        {
-            m_retreating = retreating;
-            ((Unit*)this)->InterruptNonMeleeSpells(false);
-        }
 
         bool m_stayPosSet;
         float m_stayPosX;
@@ -248,30 +245,13 @@ class MANGOS_DLL_SPEC Pet : public Creature
         float m_stayPosZ;
         float m_stayPosO;
 
+        void SetStayPosition(bool stay = false);
         bool IsStayPosSet() { return m_stayPosSet; }
 
         float GetStayPosX() { return m_stayPosX; }
         float GetStayPosY() { return m_stayPosY; }
         float GetStayPosZ() { return m_stayPosZ; }
         float GetStayPosO() { return m_stayPosO; }
-
-        void SetStayPosition()
-        {
-            m_stayPosX = GetPositionX();
-            m_stayPosY = GetPositionY();
-            m_stayPosZ = GetPositionZ();
-            m_stayPosO = GetOrientation();
-            m_stayPosSet = true;
-        }
-
-        void ClearStayPosition()
-        {
-            m_stayPosSet = false;
-            m_stayPosX = 0;
-            m_stayPosY = 0;
-            m_stayPosZ = 0;
-            m_stayPosO = 0;
-        }
 
         PetSpellMap     m_spells;
         AutoSpellList   m_autospells;

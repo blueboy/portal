@@ -375,6 +375,7 @@ Spell::Spell(Unit* caster, SpellEntry const* info, bool triggered, ObjectGuid or
     m_cast_count = 0;
     m_glyphIndex = 0;
     m_triggeredByAuraSpell  = nullptr;
+    m_spellAuraHolder = nullptr;
 
     // Auto Shot & Shoot (wand)
     m_autoRepeat = IsAutoRepeatRangedSpell(m_spellInfo);
@@ -402,7 +403,7 @@ Spell::Spell(Unit* caster, SpellEntry const* info, bool triggered, ObjectGuid or
             if (!IsPositiveTarget(m_spellInfo->EffectImplicitTargetA[j], m_spellInfo->EffectImplicitTargetB[j]))
                 m_canReflect = true;
             else
-                m_canReflect = m_spellInfo->HasAttribute(SPELL_ATTR_EX_NEGATIVE);
+                m_canReflect = m_spellInfo->HasAttribute(SPELL_ATTR_EX_UNK7);
 
             if (m_canReflect)
                 continue;
@@ -1204,6 +1205,9 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         ((Creature*)m_caster)->AI()->SpellHitTarget(unit, m_spellInfo);
     if (real_caster && real_caster != m_caster && real_caster->GetTypeId() == TYPEID_UNIT && ((Creature*)real_caster)->AI())
         ((Creature*)real_caster)->AI()->SpellHitTarget(unit, m_spellInfo);
+
+    if (m_spellAuraHolder)
+        m_spellAuraHolder->SetState(SPELLAURAHOLDER_STATE_READY);
 }
 
 void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
@@ -1322,7 +1326,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
 
     if (IsSpellAppliesAura(m_spellInfo, effectMask))
     {
-        m_spellAuraHolder = CreateSpellAuraHolder(m_spellInfo, unit, realCaster, m_CastItem);
+        m_spellAuraHolder = CreateSpellAuraHolder(m_spellInfo, unit, realCaster, m_CastItem, m_triggeredBySpellInfo);
         m_spellAuraHolder->setDiminishGroup(m_diminishGroup);
     }
     else
@@ -1364,6 +1368,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
                 if (duration == 0)
                 {
                     delete m_spellAuraHolder;
+                    m_spellAuraHolder = nullptr;
                     return;
                 }
             }
@@ -1379,7 +1384,10 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
             unit->AddSpellAuraHolder(m_spellAuraHolder);
         }
         else
+        {
             delete m_spellAuraHolder;
+            m_spellAuraHolder = nullptr;
+        }
     }
 }
 
@@ -1776,70 +1784,79 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
         }
         case TARGET_CHAIN_DAMAGE:
         {
-            if (EffectChainTarget <= 1)
+            Unit* pUnitTarget = m_targets.getUnitTarget();
+
+            if (!pUnitTarget)
+                break;
+
+            if (Unit* magnetTarget = m_caster->SelectMagnetTarget(pUnitTarget, this, effIndex))
             {
-                if (Unit* pUnitTarget = m_caster->SelectMagnetTarget(m_targets.getUnitTarget(), this, effIndex))
+                if (magnetTarget != pUnitTarget)    // magnet target may be same as current target
                 {
-                    m_targets.setUnitTarget(pUnitTarget);
+                    m_targets.setUnitTarget(magnetTarget);
                     m_spellFlags |= SPELL_FLAG_REDIRECTED;
-                    targetUnitMap.push_back(pUnitTarget);
+                    targetUnitMap.push_back(magnetTarget);
+                    break;
                 }
             }
-            else
+
+            if (EffectChainTarget <= 1)
             {
-                Unit* pUnitTarget = m_targets.getUnitTarget();
-                WorldObject* originalCaster = GetAffectiveCasterObject();
-                if (!pUnitTarget || !originalCaster)
-                    break;
-
-                unMaxTargets = EffectChainTarget;
-
-                float max_range;
-                if (m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MELEE)
-                    max_range = radius;
-                else
-                    // FIXME: This very like horrible hack and wrong for most spells
-                    max_range = radius + unMaxTargets * CHAIN_SPELL_JUMP_RADIUS;
-
-                UnitList tempTargetUnitMap;
-                {
-                    MaNGOS::AnyAoEVisibleTargetUnitInObjectRangeCheck u_check(pUnitTarget, originalCaster, max_range);
-                    MaNGOS::UnitListSearcher<MaNGOS::AnyAoEVisibleTargetUnitInObjectRangeCheck> searcher(tempTargetUnitMap, u_check);
-                    Cell::VisitAllObjects(m_caster, searcher, max_range);
-                }
-
-                if (tempTargetUnitMap.empty())
-                    break;
-
-                tempTargetUnitMap.sort(TargetDistanceOrderNear(pUnitTarget));
-
-                if (*tempTargetUnitMap.begin() == pUnitTarget)
-                    tempTargetUnitMap.erase(tempTargetUnitMap.begin());
-
                 targetUnitMap.push_back(pUnitTarget);
-                uint32 t = unMaxTargets - 1;
-                Unit* prev = pUnitTarget;
-                UnitList::iterator next = tempTargetUnitMap.begin();
+                break;
+            }
 
-                while (t && next != tempTargetUnitMap.end())
+            WorldObject* originalCaster = GetAffectiveCasterObject();
+            if (!originalCaster)
+                break;
+
+            unMaxTargets = EffectChainTarget;
+
+            float max_range;
+            if (m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MELEE)
+                max_range = radius;
+            else
+                // FIXME: This very like horrible hack and wrong for most spells
+                max_range = radius + unMaxTargets * CHAIN_SPELL_JUMP_RADIUS;
+
+            UnitList tempTargetUnitMap;
+            {
+                MaNGOS::AnyAoEVisibleTargetUnitInObjectRangeCheck u_check(pUnitTarget, originalCaster, max_range);
+                MaNGOS::UnitListSearcher<MaNGOS::AnyAoEVisibleTargetUnitInObjectRangeCheck> searcher(tempTargetUnitMap, u_check);
+                Cell::VisitAllObjects(m_caster, searcher, max_range);
+            }
+
+            if (tempTargetUnitMap.empty())
+                break;
+
+            tempTargetUnitMap.sort(TargetDistanceOrderNear(pUnitTarget));
+
+            if (*tempTargetUnitMap.begin() == pUnitTarget)
+                tempTargetUnitMap.erase(tempTargetUnitMap.begin());
+
+            targetUnitMap.push_back(pUnitTarget);
+            uint32 t = unMaxTargets - 1;
+            Unit* prev = pUnitTarget;
+            UnitList::iterator next = tempTargetUnitMap.begin();
+
+            while (t && next != tempTargetUnitMap.end())
+            {
+                if (!prev->IsWithinDist(*next, CHAIN_SPELL_JUMP_RADIUS))
+                    break;
+
+                if (!prev->IsWithinLOSInMap(*next)
+                    || ((m_spellInfo->AttributesEx6 & SPELL_ATTR_EX6_IGNORE_CC_TARGETS) && !(*next)->CanFreeMove()))
                 {
-                    if (!prev->IsWithinDist(*next, CHAIN_SPELL_JUMP_RADIUS))
-                        break;
-
-                    if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS) && !prev->IsWithinLOSInMap(*next))
-                    {
-                        ++next;
-                        continue;
-                    }
-
-                    prev = *next;
-                    targetUnitMap.push_back(prev);
-                    tempTargetUnitMap.erase(next);
-                    tempTargetUnitMap.sort(TargetDistanceOrderNear(prev));
-                    next = tempTargetUnitMap.begin();
-
-                    --t;
+                    ++next;
+                    continue;
                 }
+                prev = *next;
+                targetUnitMap.push_back(prev);
+                tempTargetUnitMap.erase(next);
+                tempTargetUnitMap.sort(TargetDistanceOrderNear(prev));
+                next = tempTargetUnitMap.begin();
+
+                --t;
             }
             break;
         }
@@ -2372,15 +2389,15 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
                 }
                 else
                 {
-                    if (Unit* pUnitTarget = m_caster->SelectMagnetTarget(target, this, effIndex))
+                    Unit* magnetTarget = m_caster->SelectMagnetTarget(target, this, effIndex);
+                    if (magnetTarget && (magnetTarget != target))
                     {
-                        if (target != pUnitTarget)
-                        {
-                            m_targets.setUnitTarget(pUnitTarget);
-                            m_spellFlags |= SPELL_FLAG_REDIRECTED;
-                        }
-                        targetUnitMap.push_back(pUnitTarget);
+                        m_targets.setUnitTarget(magnetTarget);
+                        m_spellFlags |= SPELL_FLAG_REDIRECTED;
+                        targetUnitMap.push_back(magnetTarget);
                     }
+                    else
+                        targetUnitMap.push_back(target);
                 }
             }
             break;
@@ -2406,11 +2423,17 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
             break;
         case TARGET_SINGLE_ENEMY:
         {
-            if (Unit* pUnitTarget = m_caster->SelectMagnetTarget(m_targets.getUnitTarget(), this, effIndex))
+            if (Unit* target = m_targets.getUnitTarget())
             {
-                m_targets.setUnitTarget(pUnitTarget);
-                m_spellFlags |= SPELL_FLAG_REDIRECTED;
-                targetUnitMap.push_back(pUnitTarget);
+                Unit* magnetTarget = m_caster->SelectMagnetTarget(target, this, effIndex);
+                if (magnetTarget && (magnetTarget != target))
+                {
+                    m_targets.setUnitTarget(magnetTarget);
+                    m_spellFlags |= SPELL_FLAG_REDIRECTED;
+                    targetUnitMap.push_back(magnetTarget);
+                }
+                else
+                    targetUnitMap.push_back(target);
             }
             break;
         }
@@ -2973,7 +2996,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
 SpellCastResult Spell::PreCastCheck(Aura* triggeredByAura /*= nullptr*/)
 {
     // Prevent casting at cast another spell (ServerSide check)
-    if (!m_IsTriggeredSpell && m_caster->IsNonMeleeSpellCasted(false, true, true))
+    if (m_caster->IsNonMeleeSpellCasted(false, true, true) && m_cast_count && !m_spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING))
         return SPELL_FAILED_SPELL_IN_PROGRESS;
 
     SpellCastResult result = CheckCast(true);
@@ -3011,7 +3034,7 @@ void Spell::SpellStart(SpellCastTargets const* targets, Aura* triggeredByAura)
     m_caster->m_Events.AddEvent(Event, m_caster->m_Events.CalculateTime(1));
 
     // Fill cost data
-    m_powerCost = CalculatePowerCost(m_spellInfo, m_caster, this, m_CastItem);
+    m_powerCost = m_IsTriggeredSpell ? 0 : CalculatePowerCost(m_spellInfo, m_caster, this, m_CastItem);
 
     SpellCastResult result = PreCastCheck();
     if (result != SPELL_CAST_OK)
@@ -4153,7 +4176,11 @@ void Spell::WriteSpellGoTargets(WorldPacket* data)
             m_needAliveTargetMask |= ihit->effectMask;
         }
         else
+        {
+            if (IsChanneledSpell(m_spellInfo) && ihit->missCondition == SPELL_MISS_RESIST)
+                m_duration = 0;                             // cancel aura to avoid visual effect continue
             ++miss;
+        }
     }
 
     for (GOTargetList::const_iterator ighit = m_UniqueGOTargetInfo.begin(); ighit != m_UniqueGOTargetInfo.end(); ++ighit)
@@ -4463,6 +4490,7 @@ void Spell::TakePower()
     if (m_spellInfo->powerType == POWER_HEALTH)
     {
         m_caster->ModifyHealth(-(int32)m_powerCost);
+        m_caster->SendSpellNonMeleeDamageLog(m_caster, m_spellInfo->Id, m_powerCost, GetSpellSchoolMask(m_spellInfo), 0, 0, false, 0, false);
         return;
     }
 
@@ -5770,7 +5798,9 @@ SpellCastResult Spell::CheckCast(bool strict)
                     else
                     {
                         Pet* dbPet = new Pet;
-                        if (!dbPet->LoadPetFromDB((Player*)m_caster, 0))
+                        if (dbPet->LoadPetFromDB((Player*)m_caster, 0))
+                            return SPELL_CAST_OK;           // still returns an error to the player, so this error must come from somewhere else...
+                        else
                         {
                             delete dbPet;
                             return SPELL_FAILED_NO_PET;
@@ -6126,7 +6156,7 @@ SpellCastResult Spell::CheckPetCast(Unit* target)
     if (!m_caster->isAlive())
         return SPELL_FAILED_CASTER_DEAD;
 
-    if (m_caster->IsNonMeleeSpellCasted(false))             // prevent spellcast interruption by another spellcast
+    if (m_caster->IsNonMeleeSpellCasted(false) && !m_spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING)) // prevent spellcast interruption by another spellcast
         return SPELL_FAILED_SPELL_IN_PROGRESS;
     if (m_caster->isInCombat() && IsNonCombatSpell(m_spellInfo))
         return SPELL_FAILED_AFFECTING_COMBAT;

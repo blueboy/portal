@@ -687,7 +687,7 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
     }
 
     // Get in CombatState
-    if (pVictim != this && damagetype != DOT)
+    if (pVictim != this && damagetype != DOT && (!spellProto || !spellProto->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO)))
     {
         SetInCombatWith(pVictim);
         pVictim->SetInCombatWith(this);
@@ -1576,14 +1576,17 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* damageInfo, Weapo
             damageInfo->procEx |= PROC_EX_CRITICAL_HIT;
             // Crit bonus calc
             damageInfo->damage += damageInfo->damage;
+
+            // Apply SPELL_AURA_MOD_CRIT_DAMAGE_BONUS modifier first
+            const int32 bonus = GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, SPELL_SCHOOL_MASK_NORMAL);
+            damageInfo->damage += int32((damageInfo->damage) * float(bonus / 100.0f));
+
             int32 mod = 0;
             // Apply SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE or SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE
             if (damageInfo->attackType == RANGED_ATTACK)
                 mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE);
             else
                 mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE);
-
-            mod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, SPELL_SCHOOL_MASK_NORMAL);
 
             uint32 crTypeMask = damageInfo->target->GetCreatureTypeMask();
 
@@ -2628,8 +2631,11 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
         return;
     }
 
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MELEE_ATTACK);
+
     // attack can be redirected to another target
-    pVictim = SelectMagnetTarget(pVictim);
+    if (Unit* magnetTarget = SelectMagnetTarget(pVictim))
+        pVictim = magnetTarget;
 
     CalcDamageInfo damageInfo;
     CalculateMeleeDamage(pVictim, &damageInfo, attType);
@@ -2647,11 +2653,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
                          GetGUIDLow(), pVictim->GetGUIDLow(), pVictim->GetTypeId(), damageInfo.damage, damageInfo.absorb, damageInfo.blocked_amount, damageInfo.resist);
 
     if (Unit* owner = GetOwner())
-    {
-        owner->AddThreat(pVictim);
-        owner->SetInCombatWith(pVictim);
-        pVictim->SetInCombatWith(owner);
-    }
+        if (owner->GetTypeId() == TYPEID_UNIT)
+        {
+            owner->SetInCombatWith(pVictim);
+            owner->AddThreat(pVictim);
+            pVictim->SetInCombatWith(owner);
+        }
+
+    for (GuidSet::const_iterator itr = m_guardianPets.begin(); itr != m_guardianPets.end(); ++itr)
+        if (Unit* pet = (Unit*)GetMap()->GetPet(*itr))
+        {
+            pet->SetInCombatWith(pVictim);
+            pet->AddThreat(pVictim);
+            pVictim->SetInCombatWith(pet);
+        }
 
     // if damage pVictim call AI reaction
     pVictim->AttackedBy(this);
@@ -4346,20 +4361,9 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                 continue;
         }
 
-        if (i_spellId == spellId) continue;
-
-        bool is_triggered_by_spell = false;
         // prevent triggering aura of removing aura that triggered it
-        for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
-            if (i_spellProto->EffectTriggerSpell[j] == spellId)
-                is_triggered_by_spell = true;
-
-        // prevent triggered aura of removing aura that triggering it (triggered effect early some aura of parent spell
-        for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
-            if (spellProto->EffectTriggerSpell[j] == i_spellId)
-                is_triggered_by_spell = true;
-
-        if (is_triggered_by_spell)
+        if (((*i).second->GetTriggeredBy() && (*i).second->GetTriggeredBy()->Id == spellId)
+            || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == i_spellId))
             continue;
 
         SpellSpecific i_spellId_spec = GetSpellSpecific(i_spellId);
@@ -4416,21 +4420,27 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
         }
 
         // non single (per caster) per target spell specific (possible single spell per target at caster)
-        if (!is_spellSpecPerTargetPerCaster && !is_spellSpecPerTarget && sSpellMgr.IsNoStackSpellDueToSpell(spellId, i_spellId))
+        if (!is_spellSpecPerTargetPerCaster && !is_spellSpecPerTarget)
         {
-            // Its a parent aura (create this aura in ApplyModifier)
-            if ((*i).second->IsInUse())
-            {
-                sLog.outError("SpellAuraHolder (Spell %u) is in process but attempt removed at SpellAuraHolder (Spell %u) adding, need add stack rule for Unit::RemoveNoStackAurasDueToAuraHolder", i->second->GetId(), holder->GetId());
+            SpellEntry const* triggeredBy = holder->GetTriggeredBy();
+            if (triggeredBy && sSpellMgr.IsSpellCanAffectSpell(triggeredBy, i_spellProto)) // check if this spell can be triggered by any talent aura
                 continue;
+
+            if (sSpellMgr.IsNoStackSpellDueToSpell(spellProto, i_spellProto))
+            {
+                // Its a parent aura (create this aura in ApplyModifier)
+                if ((*i).second->IsInUse())
+                {
+                    sLog.outError("SpellAuraHolder (Spell %u) is in process but attempt removed at SpellAuraHolder (Spell %u) adding, need add stack rule for Unit::RemoveNoStackAurasDueToAuraHolder", i->second->GetId(), holder->GetId());
+                    continue;
+                }
+                RemoveAurasDueToSpell(i_spellId);
+
+                if (m_spellAuraHolders.empty())
+                    break;
+                else
+                    next = m_spellAuraHolders.begin();
             }
-            RemoveAurasDueToSpell(i_spellId);
-
-            if (m_spellAuraHolders.empty())
-                break;
-            else
-                next =  m_spellAuraHolders.begin();
-
             continue;
         }
 
@@ -5679,7 +5689,7 @@ bool Unit::IsHostileTo(Unit const* unit) const
             return false;
 
         // Sanctuary
-        if (pTarget->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY) && pTester->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY))
+        if (pTarget->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY) && pTester->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY))
             return false;
 
         // PvP FFA state
@@ -5791,7 +5801,7 @@ bool Unit::IsFriendlyTo(Unit const* unit) const
             return true;
 
         // Sanctuary
-        if (pTarget->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY) && pTester->HasByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY))
+        if (pTarget->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY) && pTester->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY))
             return true;
 
         // PvP FFA state
@@ -5972,10 +5982,13 @@ void Unit::AttackedBy(Unit* attacker)
         pet->AttackedBy(attacker);
 }
 
-bool Unit::AttackStop(bool targetSwitch /*=false*/)
+void Unit::AttackStop(bool targetSwitch /*=false*/, bool includingCast /*=false*/)
 {
+    if (includingCast && IsNonMeleeSpellCasted(false))
+        InterruptNonMeleeSpells(false);
+
     if (!m_attacking)
-        return false;
+        return;
 
     Unit* victim = m_attacking;
 
@@ -6002,25 +6015,17 @@ bool Unit::AttackStop(bool targetSwitch /*=false*/)
     }
 
     SendMeleeAttackStop(victim);
-
-    return true;
 }
 
 void Unit::CombatStop(bool includingCast)
 {
-    if (includingCast && IsNonMeleeSpellCasted(false))
-        InterruptNonMeleeSpells(false);
-
-    AttackStop();
+    AttackStop(true, includingCast);
     RemoveAllAttackers();
 
     if (GetTypeId() == TYPEID_PLAYER)
         ((Player*)this)->SendAttackSwingCancelAttack();     // melee and ranged forced attack cancel
-    else if (GetTypeId() == TYPEID_UNIT)
-    {
-        if (((Creature*)this)->GetTemporaryFactionFlags() & TEMPFACTION_RESTORE_COMBAT_STOP)
-            ((Creature*)this)->ClearTemporaryFaction();
-    }
+    else if (((Creature*)this)->GetTemporaryFactionFlags() & TEMPFACTION_RESTORE_COMBAT_STOP)
+        ((Creature*)this)->ClearTemporaryFaction();
 
     ClearInCombat();
 }
@@ -6078,7 +6083,9 @@ void Unit::RemoveAllAttackers()
     while (!m_attackers.empty())
     {
         AttackerSet::iterator iter = m_attackers.begin();
-        if (!(*iter)->AttackStop())
+        (*iter)->AttackStop();
+
+        if (m_attacking)
         {
             sLog.outError("WORLD: Unit has an attacker that isn't attacking it!");
             m_attackers.erase(iter);
@@ -6438,7 +6445,8 @@ Unit* Unit::SelectMagnetTarget(Unit* victim, Spell* spell, SpellEffectIndex eff)
         }
     }
 
-    return victim;
+    // No magnet Target found
+    return nullptr;
 }
 
 void Unit::SendHealSpellLog(Unit* pVictim, uint32 SpellID, uint32 Damage, uint32 OverHeal, bool critical, uint32 absorb)
@@ -7005,6 +7013,14 @@ bool Unit::IsSpellCrit(Unit* pVictim, SpellEntry const* spellProto, SpellSchoolM
     if (spellProto->HasAttribute(SPELL_ATTR_EX2_CANT_CRIT))
         return false;
 
+    // Creatures do not crit with their spells or abilities, unless it is owned by a player (pet, totem, etc)
+    if (GetTypeId() != TYPEID_PLAYER)
+    {
+        Unit* owner = GetOwner();
+        if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
+            return false;
+    }
+
     float crit_chance = 0.0f;
     switch (spellProto->DmgClass)
     {
@@ -7189,6 +7205,10 @@ uint32 Unit::SpellCriticalDamageBonus(SpellEntry const* spellProto, uint32 damag
             break;
     }
 
+    // Apply SPELL_AURA_MOD_CRIT_DAMAGE_BONUS modifier first
+    const int32 pctBonus = GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, GetSpellSchoolMask(spellProto));
+    crit_bonus += int32((damage + crit_bonus) * float(pctBonus / 100.0f));
+
     // adds additional damage to crit_bonus (from talents)
     if (Player* modOwner = GetSpellModOwner())
         modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_CRIT_DAMAGE_BONUS, crit_bonus);
@@ -7206,8 +7226,6 @@ uint32 Unit::SpellCriticalDamageBonus(SpellEntry const* spellProto, uint32 damag
     }
     else
         critPctDamageMod += pVictim->GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_ATTACKER_SPELL_CRIT_DAMAGE, GetSpellSchoolMask(spellProto));
-
-    critPctDamageMod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, GetSpellSchoolMask(spellProto));
 
     uint32 creatureTypeMask = pVictim->GetCreatureTypeMask();
     critPctDamageMod += GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_CRIT_PERCENT_VERSUS, creatureTypeMask);
@@ -10171,7 +10189,7 @@ void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* pTarget, uint32 procFlag, 
     for (SpellAuraHolderMap::const_iterator itr = GetSpellAuraHolderMap().begin(); itr != GetSpellAuraHolderMap().end(); ++itr)
     {
         // skip deleted auras (possible at recursive triggered call
-        if (itr->second->IsDeleted())
+        if (itr->second->GetState() != SPELLAURAHOLDER_STATE_READY || itr->second->IsDeleted())
             continue;
 
         SpellProcEventEntry const* spellProcEvent = nullptr;
