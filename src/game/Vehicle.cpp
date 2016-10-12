@@ -38,7 +38,7 @@
 #include "Log.h"
 #include "Unit.h"
 #include "Creature.h"
-#include "CreatureAI.h"
+#include "AI/CreatureAI.h"
 #include "ObjectMgr.h"
 #include "SQLStorages.h"
 #include "movement/MoveSplineInit.h"
@@ -619,7 +619,8 @@ void VehicleInfo::RemoveSeatMods(Unit* passenger, uint32 seatFlags)
         }
 
         // Reinitialize movement
-        ((Creature*)passenger)->AI()->SetCombatMovement(true, true);
+        if (((Creature*)passenger)->AI())
+            ((Creature*)passenger)->AI()->SetCombatMovement(true, true);
         if (!passenger->getVictim())
             passenger->GetMotionMaster()->Initialize();
     }

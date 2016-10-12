@@ -18,6 +18,23 @@
 #ifndef __BATTLEGROUNDDS_H
 #define __BATTLEGROUNDDS_H
 
+enum
+{
+    BG_DS_CREATURE_WATER_SPOUT        = 28567,
+
+    // BG_DS_GO_DALARA_SEWERS_DOOR_1  = 192642,
+    // BG_DS_GO_DALARA_SEWERS_DOOR_2  = 192643,
+    BG_DS_GO_WATERFALL_COLLISION      = 194395,
+    BG_DS_GO_WATERFALL_ANIM           = 191877,
+    // BG_DS_GO_SHADOW_SIGHT_1        = 184663,
+    // BG_DS_GO_SHADOW_SIGHT_2        = 184664,
+
+    BG_DS_SPELL_FLUSH                 = 57405,    // Triggers 61698; Visual and target selector for the starting knockback from the pipe
+    BG_DS_SPELL_WATER_SPOUT           = 58873,    // Knockback effect of the central waterfall
+
+    BG_DS_SPELL_DEMONIC_CIRCLE        = 48018     // Demonic Circle Summon
+};
+
 class BattleGround;
 
 class BattleGroundDSScore : public BattleGroundScore
@@ -37,5 +54,30 @@ class BattleGroundDS : public BattleGround
 
         /* inherited from BattlegroundClass */
         virtual void AddPlayer(Player* plr) override;
+        virtual void StartingEventOpenDoors() override;
+        virtual void FillInitialWorldStates(WorldPacket &d, uint32& count) override;
+        virtual void Reset() override;
+
+        void RemovePlayer(Player* plr, ObjectGuid guid) override;
+        bool HandleAreaTrigger(Player* plr, uint32 triggerId) override;
+        void HandleKillPlayer(Player* plr, Player* killer) override;
+        bool HandlePlayerUnderMap(Player* plr) override;
+
+        void HandleCreatureCreate(Creature* creature) override;
+        void HandleGameObjectCreate(GameObject* go) override;
+
+        void Update(uint32 diff) override;
+
+    private:
+        uint32 m_uiFlushTimer;
+        uint32 m_uiWaterfallTimer;
+        uint32 m_uiWaterfallSpellTimer;
+        uint8 m_uiWaterfallStage;
+
+        GuidList m_lGateTriggersGuids;
+
+        ObjectGuid m_waterfallTriggerGuid;
+        ObjectGuid m_waterfallCollisionGuid;
+        ObjectGuid m_waterfallAnimGuid;
 };
 #endif

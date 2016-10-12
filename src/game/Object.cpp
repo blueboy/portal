@@ -403,7 +403,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
 
     if (updatetype == UPDATETYPE_CREATE_OBJECT || updatetype == UPDATETYPE_CREATE_OBJECT2)
     {
-        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsTransport())
+        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsDynTransport())
         {
             if (((GameObject*)this)->ActivateToQuest(target) || target->isGameMaster())
                 IsActivateToQuest = true;
@@ -421,7 +421,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
     }
     else                                                    // case UPDATETYPE_VALUES
     {
-        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsTransport())
+        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsDynTransport())
         {
             if (((GameObject*)this)->ActivateToQuest(target) || target->isGameMaster())
                 IsActivateToQuest = true;
@@ -1314,6 +1314,38 @@ bool WorldObject::HasInArc(const float arcangle, const WorldObject* obj) const
     float lborder =  -1 * (arc / 2.0f);                     // in range -pi..0
     float rborder = (arc / 2.0f);                           // in range 0..pi
     return ((angle >= lborder) && (angle <= rborder));
+}
+
+bool WorldObject::IsFacingTargetsBack(const WorldObject* target, float arc /*= M_PI_F*/) const
+{
+    if (!target)
+        return false;
+
+    //if target is facing the current object then we know its not possible that the current object would be facing the targets back
+    if (target->HasInArc(arc, this))
+        return false;
+
+    //if current object is not facing the target then we know the current object is not facing the target at all
+    if (!this->HasInArc(arc, target))
+        return false;
+
+    return true;
+}
+
+bool WorldObject::IsFacingTargetsFront(const WorldObject* target, float arc /*= M_PI_F*/) const
+{
+    if (!target)
+        return false;
+
+    //if target is not facing the current object then we know its not possible that the current object would be facing the targets front
+    if (!target->HasInArc(arc, this))
+        return false;
+
+    //if current object is not facing the target then we know the current object is not facing the target at all
+    if (!this->HasInArc(arc, target))
+        return false;
+
+    return true;
 }
 
 bool WorldObject::isInFrontInMap(WorldObject const* target, float distance,  float arc) const

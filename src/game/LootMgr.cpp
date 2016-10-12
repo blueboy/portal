@@ -342,7 +342,7 @@ LootItem::LootItem(LootStoreItem const& li, uint32 _lootSlot, uint32 threshold)
     itemProto         = ObjectMgr::GetItemPrototype(li.itemid);
     if (itemProto)
     {
-        freeForAll       = !!(itemProto->Flags & ITEM_FLAG_PARTY_LOOT);
+        freeForAll       = !!(itemProto->Flags & ITEM_FLAG_MULTI_DROP);
         displayID        = itemProto->DisplayInfoID;
         isUnderThreshold = itemProto->Quality < threshold;
     }
@@ -372,7 +372,7 @@ LootItem::LootItem(uint32 _itemId, uint32 _count, uint32 _randomSuffix, int32 _r
     itemProto = ObjectMgr::GetItemPrototype(_itemId);
     if (itemProto)
     {
-        freeForAll = !!(itemProto->Flags & ITEM_FLAG_PARTY_LOOT);
+        freeForAll = !!(itemProto->Flags & ITEM_FLAG_MULTI_DROP);
         displayID = itemProto->DisplayInfoID;
     }
     else
@@ -403,10 +403,10 @@ bool LootItem::AllowedForPlayer(Player const* player, WorldObject const* lootTar
         return false;
 
     // not show loot for not own team
-    if ((itemProto->Flags2 & ITEM_FLAG2_HORDE_ONLY) && player->GetTeam() != HORDE)
+    if ((itemProto->Flags2 & ITEM_FLAG2_FACTION_HORDE) && player->GetTeam() != HORDE)
         return false;
 
-    if ((itemProto->Flags2 & ITEM_FLAG2_ALLIANCE_ONLY) && player->GetTeam() != ALLIANCE)
+    if ((itemProto->Flags2 & ITEM_FLAG2_FACTION_ALLIANCE) && player->GetTeam() != ALLIANCE)
         return false;
 
     switch (lootItemType)
@@ -681,7 +681,7 @@ bool GroupLootRoll::TryToStart(Loot& loot, uint32 itemSlot)
 
         // initialize item prototype and check enchant possibilities for this group
         m_voteMask = ROLL_VOTE_MASK_ALL;
-        if (m_lootItem->itemProto->Flags2 & ITEM_FLAG2_NEED_ROLL_DISABLED)
+        if (m_lootItem->itemProto->Flags2 & ITEM_FLAG2_CAN_ONLY_ROLL_GREED)
             m_voteMask = RollVoteMask(m_voteMask & ~ROLL_VOTE_MASK_NEED);
         if (!m_lootItem->itemProto->DisenchantID || uint32(m_lootItem->itemProto->RequiredDisenchantSkill) > m_loot->m_maxEnchantSkill)
             m_voteMask = RollVoteMask(m_voteMask & ~ROLL_VOTE_MASK_DISENCHANT);
@@ -2636,7 +2636,7 @@ void LoadLootTemplates_Item()
     {
         if (ItemPrototype const* proto = sItemStorage.LookupEntry<ItemPrototype>(i))
         {
-            if (!(proto->Flags & ITEM_FLAG_LOOTABLE))
+            if (!(proto->Flags & ITEM_FLAG_HAS_LOOT))
                 continue;
 
             if (ids_set.find(proto->ItemId) != ids_set.end() || proto->MaxMoneyLoot > 0)
@@ -2663,7 +2663,7 @@ void LoadLootTemplates_Milling()
         if (!proto)
             continue;
 
-        if (!(proto->Flags & ITEM_FLAG_MILLABLE))
+        if (!(proto->Flags & ITEM_FLAG_IS_MILLABLE))
             continue;
 
         if (ids_set.find(proto->ItemId) != ids_set.end())
@@ -2714,7 +2714,7 @@ void LoadLootTemplates_Prospecting()
         if (!proto)
             continue;
 
-        if (!(proto->Flags & ITEM_FLAG_PROSPECTABLE))
+        if (!(proto->Flags & ITEM_FLAG_IS_PROSPECTABLE))
             continue;
 
         if (ids_set.find(proto->ItemId) != ids_set.end())

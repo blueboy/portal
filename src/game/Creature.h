@@ -319,6 +319,8 @@ enum AttackingTarget
     ATTACKING_TARGET_RANDOM = 0,                            // Just selects a random target
     ATTACKING_TARGET_TOPAGGRO,                              // Selects targes from top aggro to bottom
     ATTACKING_TARGET_BOTTOMAGGRO,                           // Selects targets from bottom aggro to top
+    ATTACKING_TARGET_NEAREST_BY,                            // Selects the nearest by target
+    ATTACKING_TARGET_FARTHEST_AWAY                          // Selects the farthest away target
 };
 
 enum SelectFlags
@@ -491,6 +493,8 @@ enum TemporaryFactionFlags                                  // Used at real fact
 class MANGOS_DLL_SPEC Creature : public Unit
 {
         CreatureAI* i_AI;
+        CreatureAI* m_pausedAI;                             // Main AI will be stored here during the possessing
+        CombatData* m_pausedCombatData;                     // Main Combat data will be stored here during possessing
 
     public:
 
@@ -499,6 +503,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         void AddToWorld() override;
         void RemoveFromWorld() override;
+        virtual void CleanupsBeforeDelete() override;
 
         bool Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* cinfo, Team team = TEAM_NONE, const CreatureData* data = nullptr, GameEventCreatureData const* eventData = nullptr);
         bool LoadCreatureAddon(bool reload);
@@ -573,6 +578,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
         bool AIM_Initialize();
 
         CreatureAI* AI() { return i_AI; }
+
+        void SetPossessed(bool isPossessed = true, Unit* owner = nullptr);
 
         void SetWalk(bool enable, bool asDefault = true);
         void SetLevitate(bool enable) override;

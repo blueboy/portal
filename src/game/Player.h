@@ -1971,6 +1971,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         static DrunkenState GetDrunkenstateByValue(uint8 value);
 
         uint32 GetDeathTimer() const { return m_deathTimer; }
+        void ResetDeathTimer();
         uint32 GetCorpseReclaimDelay(bool pvp) const;
         void UpdateCorpseReclaimDelay();
         void SendCorpseReclaimDelay(bool load = false);
@@ -2188,6 +2189,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool IsFreeFlying() const { return HasAuraType(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED) || HasAuraType(SPELL_AURA_FLY); }
         bool CanStartFlyInArea(uint32 mapid, uint32 zone, uint32 area) const;
 
+        bool IsClientControl(Unit* target) const;
         void SetClientControl(Unit* target, uint8 allowMove);
         void SetMover(Unit* target) { m_mover = target ? target : this; }
         Unit* GetMover() const { return m_mover; }

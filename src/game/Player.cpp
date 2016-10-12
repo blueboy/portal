@@ -1421,7 +1421,7 @@ void Player::Update(uint32 update_diff, uint32 p_time)
     }
 
     // Not auto-free ghost from body in instances; also check for resurrection prevention
-    if (m_deathTimer > 0  && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+    if (m_deathTimer > 0  && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
     {
         if (p_time >= m_deathTimer)
         {
@@ -3128,10 +3128,39 @@ bool Player::addSpell(uint32 spell_id, bool active, bool learning, bool dependen
         // non talent spell: learn low ranks (recursive call)
         else if (uint32 prev_spell = sSpellMgr.GetPrevSpellInChain(spell_id))
         {
-            if (!IsInWorld() || disabled)                   // at spells loading, no output, but allow save
-                addSpell(prev_spell, active, true, true, disabled);
-            else                                            // at normal learning
-                learnSpell(prev_spell, true);
+            // Check if a spell is learned by a talent first
+            bool talent = false;
+            for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i)
+            {
+                TalentEntry const* talentInfo = sTalentStore.LookupEntry(i);
+                if (!talentInfo)
+                    continue;
+                TalentTabEntry const* talentTabInfo = sTalentTabStore.LookupEntry(talentInfo->TalentTab);
+                if (!talentTabInfo || !(getClassMask() & talentTabInfo->ClassMask))
+                    continue;
+                uint32 parent = 0;
+                for (uint32 rank = 0; rank < MAX_TALENT_RANK; ++rank)
+                {
+                    if (talentInfo->RankID[rank] && sSpellMgr.IsSpellLearnToSpell(talentInfo->RankID[rank], prev_spell))
+                    {
+                        parent = talentInfo->RankID[rank];
+                        break;
+                    }
+                }
+                if (parent)
+                {
+                    talent = !HasSpell(parent);
+                    break;
+                }
+            }
+            // We do not learn previous rank if its owned by a talent we don't know
+            if (!talent)
+            {
+                if (!IsInWorld() || disabled)                   // at spells loading, no output, but allow save
+                    addSpell(prev_spell, active, true, true, disabled);
+                else                                            // at normal learning
+                    learnSpell(prev_spell, true);
+            }
         }
 
         PlayerSpell newspell;
@@ -3344,7 +3373,7 @@ bool Player::IsNeedCastPassiveLikeSpellAtLearn(SpellEntry const* spellInfo) cons
 {
     ShapeshiftForm form = GetShapeshiftForm();
 
-    if (IsNeedCastSpellAtFormApply(spellInfo, form))        // SPELL_ATTR_PASSIVE | SPELL_ATTR_UNK7 spells
+    if (IsNeedCastSpellAtFormApply(spellInfo, form))        // SPELL_ATTR_PASSIVE | SPELL_ATTR_HIDDEN_CLIENTSIDE spells
         return true;                                        // all stance req. cases, not have auarastate cases
 
     if (!spellInfo->HasAttribute(SPELL_ATTR_PASSIVE))
@@ -3395,6 +3424,11 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
     if (itr == m_spells.end())
         return;
 
+    // Always try to remove all dependent spells if present (needed to reset some talents properly)
+    SpellLearnSpellMapBounds spell_bounds = sSpellMgr.GetSpellLearnSpellMapBounds(spell_id);
+    for (SpellLearnSpellMap::const_iterator child_itr = spell_bounds.first; child_itr != spell_bounds.second; ++child_itr)
+        removeSpell(child_itr->second.spell, !IsPassiveSpell(child_itr->second.spell), learn_low_rank);
+
     PlayerSpell& playerSpell = itr->second;
     if (playerSpell.state == PLAYERSPELL_REMOVED || (disabled && playerSpell.disabled))
         return;
@@ -3403,7 +3437,7 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
     SpellChainMapNext const& nextMap = sSpellMgr.GetSpellChainNext();
     for (SpellChainMapNext::const_iterator itr2 = nextMap.lower_bound(spell_id); itr2 != nextMap.upper_bound(spell_id); ++itr2)
         if (HasSpell(itr2->second) && !GetTalentSpellPos(itr2->second))
-            removeSpell(itr2->second, disabled, false);
+            removeSpell(itr2->second, !IsPassiveSpell(itr2->second), false);
 
     // re-search, it can be corrupted in prev loop
     itr = m_spells.find(spell_id);
@@ -3427,7 +3461,8 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
             playerSpell.state = PLAYERSPELL_REMOVED;
     }
 
-    RemoveAurasDueToSpell(spell_id);
+    RemoveAurasByCasterSpell(spell_id, GetObjectGuid());
+    RemoveAurasTriggeredBySpell(spell_id, GetObjectGuid());
 
     // remove pet auras
     for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -3531,12 +3566,6 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
             }
         }
     }
-
-    // remove dependent spells
-    SpellLearnSpellMapBounds spell_bounds = sSpellMgr.GetSpellLearnSpellMapBounds(spell_id);
-
-    for (SpellLearnSpellMap::const_iterator itr2 = spell_bounds.first; itr2 != spell_bounds.second; ++itr2)
-        removeSpell(itr2->second.spell, disabled);
 
     // activate lesser rank in spellbook/action bar, and cast it if need
     bool prev_activate = false;
@@ -3773,10 +3802,7 @@ bool Player::resetTalents(bool no_cost, bool all_specs)
         RemoveAtLoginFlag(AT_LOGIN_RESET_TALENTS, true);
 
     if (m_usedTalentCount == 0 && !all_specs)
-    {
-        UpdateFreeTalentPoints(false);                      // for fix if need counter
-        return false;
-    }
+        no_cost = true;
 
     uint32 cost = 0;
 
@@ -4428,7 +4454,7 @@ void Player::DeleteOldCharacters(uint32 keepDays)
 void Player::SetRoot(bool enable)
 {
     WorldPacket data(enable ? SMSG_FORCE_MOVE_ROOT : SMSG_FORCE_MOVE_UNROOT, GetPackGUID().size() + 4);
-    data << GetMover()->GetPackGUID();
+    data <<GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 }
@@ -4436,7 +4462,7 @@ void Player::SetRoot(bool enable)
 void Player::SetWaterWalk(bool enable)
 {
     WorldPacket data(enable ? SMSG_MOVE_WATER_WALK : SMSG_MOVE_LAND_WALK, GetPackGUID().size() + 4);
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     data << uint32(0);
     GetSession()->SendPacket(&data);
 }
@@ -4449,12 +4475,12 @@ void Player::SetLevitate(bool enable)
     else
         data.Initialize(SMSG_MOVE_GRAVITY_ENABLE, 12);
 
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     data << uint32(0);                                      // unk
     SendMessageToSet(&data, true);
 
     data.Initialize(MSG_MOVE_GRAVITY_CHNG, 64);
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     m_movementInfo.Write(data);
     SendMessageToSet(&data, false);
 }
@@ -4472,7 +4498,7 @@ void Player::SetCanFly(bool enable)
     SendMessageToSet(&data, true);
 
     data.Initialize(MSG_MOVE_UPDATE_CAN_FLY, 64);
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     m_movementInfo.Write(data);
     SendMessageToSet(&data, false);
 }
@@ -4485,7 +4511,7 @@ void Player::SetFeatherFall(bool enable)
     else
         data.Initialize(SMSG_MOVE_NORMAL_FALL, 8 + 4);
 
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 
@@ -4502,7 +4528,7 @@ void Player::SetHover(bool enable)
     else
         data.Initialize(SMSG_MOVE_UNSET_HOVER, 8 + 4);
 
-    data << GetMover()->GetPackGUID();
+    data << GetPackGUID();
     data << uint32(0);
     SendMessageToSet(&data, true);
 }
@@ -4513,6 +4539,13 @@ void Player::SetHover(bool enable)
 */
 void Player::BuildPlayerRepop()
 {
+    // case when player is ghouled (raise ally)
+    if (IsGhouled())
+    {
+        Uncharm();
+        ResetControlState(false);
+    }
+
     WorldPacket data(SMSG_PRE_RESURRECT, GetPackGUID().size());
     data << GetPackGUID();
     GetSession()->SendPacket(&data);
@@ -4564,6 +4597,13 @@ void Player::BuildPlayerRepop()
 
 void Player::ResurrectPlayer(float restore_percent, bool applySickness)
 {
+    // case when player is ghouled (raise ally)
+    if (IsGhouled())
+    {
+        Uncharm();
+        ResetControlState(false);
+    }
+
     WorldPacket data(SMSG_DEATH_RELEASE_LOC, 4 * 4);        // remove spirit healer position
     data << uint32(-1);
     data << float(0);
@@ -4646,8 +4686,7 @@ void Player::KillPlayer()
     SetUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_NONE);
     ApplyModByteFlag(PLAYER_FIELD_BYTES, 0, PLAYER_FIELD_BYTE_RELEASE_TIMER, !sMapStore.LookupEntry(GetMapId())->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION));
 
-    // 6 minutes until repop at graveyard
-    m_deathTimer = 6 * MINUTE * IN_MILLISECONDS;
+    ResetDeathTimer();
 
     UpdateCorpseReclaimDelay();                             // dependent at use SetDeathPvP() call before kill
 
@@ -7906,7 +7945,7 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType)
 
             if (roll_chance_f(chance))
             {
-                if (IsPositiveSpell(spellInfo->Id))
+                if (IsPositiveSpell(spellInfo->Id, this, Target))
                     CastSpell(this, spellInfo->Id, true, item);
                 else
                 {
@@ -7949,6 +7988,9 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
     // use triggered flag only for items with many spell casts and for not first cast
     int count = 0;
 
+    // as we neet to check at each cast if item still exist we'll save its pos here to retrieve it later
+    uint16 itemPos = item->GetPos();
+
     // item spells casted at use
     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
     {
@@ -7975,8 +8017,18 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
         spell->m_glyphIndex = glyphIndex;                   // glyph index
         spell->SpellStart(&targets);
 
+        // some spell can destroy the item so we have to refresh the pointer here
+        // TODO::Remove this hack when we'll found a better way to handle DestroyItem in spell::TakeReagent() because some spells may not be fully processed due to this
+        item = GetItemByPos(itemPos);
+        if (!item)
+            return;
+
         ++count;
     }
+
+    // if we already used the item spell then nothing to do more (is it exist more than one use for an item?)
+    if (count)
+        return;
 
     // Item enchantments spells casted at use
     for (int e_slot = 0; e_slot < MAX_ENCHANTMENT_SLOT; ++e_slot)
@@ -8003,6 +8055,12 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, uint8
             spell->m_cast_count = cast_count;               // set count of casts
             spell->m_glyphIndex = glyphIndex;               // glyph index
             spell->SpellStart(&targets);
+
+            // some spell can destroy the item so we have to refresh the pointer here
+            // TODO::Remove this hack when we'll found a better way to handle DestroyItem in spell::TakeReagent() because some spells may not be fully processed due to this
+            item = GetItemByPos(itemPos);
+            if (!item)
+                return;
 
             ++count;
         }
@@ -8298,6 +8356,22 @@ void Player::SendInitWorldStates(uint32 zoneid, uint32 areaid)
             break;
         case 3968:                                          // Ruins of Lordaeron
             if (bg && bg->GetTypeID() == BATTLEGROUND_RL)
+                bg->FillInitialWorldStates(data, count);
+            break;
+        case 4378:                                          // Dalaran Severs
+            if (bg && bg->GetTypeID() == BATTLEGROUND_DS)
+                bg->FillInitialWorldStates(data, count);
+            break;
+        case 4384:                                          // Strand of the Ancients
+            if (bg && bg->GetTypeID() == BATTLEGROUND_SA)
+                bg->FillInitialWorldStates(data, count);
+            break;
+        case 4406:                                          // Ring of Valor
+            if (bg && bg->GetTypeID() == BATTLEGROUND_RV)
+                bg->FillInitialWorldStates(data, count);
+            break;
+        case 4710:                                          // Isle of Conquest
+            if (bg && bg->GetTypeID() == BATTLEGROUND_IC)
                 bg->FillInitialWorldStates(data, count);
             break;
     }
@@ -10658,10 +10732,10 @@ InventoryResult Player::CanUseItem(ItemPrototype const* pProto) const
 
     if (pProto)
     {
-        if ((pProto->Flags2 & ITEM_FLAG2_HORDE_ONLY) && GetTeam() != HORDE)
+        if ((pProto->Flags2 & ITEM_FLAG2_FACTION_HORDE) && GetTeam() != HORDE)
             return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
 
-        if ((pProto->Flags2 & ITEM_FLAG2_ALLIANCE_ONLY) && GetTeam() != ALLIANCE)
+        if ((pProto->Flags2 & ITEM_FLAG2_FACTION_ALLIANCE) && GetTeam() != ALLIANCE)
             return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
 
         if ((pProto->AllowableClass & getClassMask()) == 0 || (pProto->AllowableRace & getRaceMask()) == 0)
@@ -13902,11 +13976,35 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
     if (!handled && pQuest->GetQuestCompleteScript() != 0)
         GetMap()->ScriptsStart(sQuestEndScripts, pQuest->GetQuestCompleteScript(), questGiver, this, Map::SCRIPT_EXEC_PARAM_UNIQUE_BY_SOURCE);
 
-    // cast spells after mark quest complete (some spells have quest completed state reqyurements in spell_area data)
-    if (pQuest->GetRewSpellCast() > 0)
-        CastSpell(this, pQuest->GetRewSpellCast(), true);
-    else if (pQuest->GetRewSpell() > 0)
-        CastSpell(this, pQuest->GetRewSpell(), true);
+    // Find spell cast on spell reward if any, then find the appropriate caster and cast it
+    uint32 spellId = pQuest->GetRewSpellCast();
+    if (!spellId)
+        spellId = pQuest->GetRewSpell();
+
+    if (spellId)
+    {
+        if (SpellEntry const* spellProto = sSpellStore.LookupEntry(spellId))
+        {
+            Unit* caster = this;
+
+            if (questGiver->GetTypeId() == TYPEID_UNIT)
+            {
+                for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (spellProto->Effect[i] == SPELL_EFFECT_LEARN_SPELL ||
+                        spellProto->Effect[i] == SPELL_EFFECT_CREATE_ITEM ||
+                        spellProto->EffectImplicitTargetA[i] == TARGET_DUELVSPLAYER ||
+                        spellProto->EffectImplicitTargetA[i] == TARGET_SINGLE_FRIEND)
+                    {
+                        caster = (Unit*)questGiver;
+                        break;
+                    }
+                }
+            }
+
+            caster->CastSpell(this, spellProto, true);
+        }
+    }
 
     if (pQuest->GetZoneOrSort() > 0)
         GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE, pQuest->GetZoneOrSort());
@@ -19051,7 +19149,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorGuid, uint32 vendorslot, uin
 
         // possible item converted for BoA case
         ItemPrototype const* crProto = ObjectMgr::GetItemPrototype(crItem->item);
-        if (crProto->Flags & ITEM_FLAG_BOA && crProto->RequiredReputationFaction &&
+        if (crProto->Flags & ITEM_FLAG_IS_BOUND_TO_ACCOUNT && crProto->RequiredReputationFaction &&
                 uint32(GetReputationRank(crProto->RequiredReputationFaction)) >= crProto->RequiredReputationRank)
             converted = (sObjectMgr.GetItemConvert(crItem->item, getRaceMask()) != 0);
 
@@ -19128,7 +19226,7 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorGuid, uint32 vendorslot, uin
         return false;
     }
 
-    uint32 price = (crItem->ExtendedCost == 0 || pProto->Flags2 & ITEM_FLAG2_EXT_COST_REQUIRES_GOLD) ? pProto->BuyPrice * count : 0;
+    uint32 price = (crItem->ExtendedCost == 0 || pProto->Flags2 & ITEM_FLAG2_DONT_IGNORE_BUY_PRICE) ? pProto->BuyPrice * count : 0;
 
     // reputation discount
     if (price)
@@ -20061,6 +20159,9 @@ void Player::SendInitialPacketsAfterAddToMap()
     if (HasAuraType(SPELL_AURA_MOD_STUN) || HasAuraType(SPELL_AURA_MOD_ROOT))
         SetRoot(true);
 
+    if (HasAuraType(SPELL_AURA_GHOST) || HasAuraType(SPELL_AURA_WATER_WALK))
+        SetWaterWalk(true);
+
     SendAurasForTarget(this);
     SendEnchantmentDurations();                             // must be after add to map
     SendItemDurations();                                    // must be after add to map
@@ -20167,7 +20268,7 @@ void Player::SendInstanceResetWarning(uint32 mapid, Difficulty difficulty, uint3
 
 void Player::ApplyEquipCooldown(Item* pItem)
 {
-    if (pItem->GetProto()->Flags & ITEM_FLAG_NO_EQUIP_COOLDOWN)
+    if (pItem->GetProto()->Flags & ITEM_FLAG_NO_EQUIPCOOLDOWN)
         return;
 
     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -20939,6 +21040,20 @@ uint32 Player::GetBaseWeaponSkillValue(WeaponAttackType attType) const
 
 void Player::ResurectUsingRequestData()
 {
+    if (m_resurrectToGhoul)
+    {
+        // we can cast raise ally spell
+        CastSpell(this, 46619, true);
+        ClearResurrectRequestData();
+        return;
+    }
+
+    if (IsGhouled())
+    {
+        Uncharm();
+        ResetControlState(false);
+    }
+
     /// Teleport before resurrecting by player, otherwise the player might get attacked from creatures near his corpse
     if (m_resurrectGuid.IsPlayer())
         TeleportTo(m_resurrectMap, m_resurrectX, m_resurrectY, m_resurrectZ, GetOrientation());
@@ -20970,6 +21085,14 @@ void Player::ResurectUsingRequestData()
     SpawnCorpseBones();
 }
 
+bool Player::IsClientControl(Unit* target) const
+{
+    return (target && !target->IsFleeing() && !target->IsConfused() && !target->IsTaxiFlying() &&
+            (target->GetTypeId() != TYPEID_PLAYER ||
+            !((Player*)target)->InBattleGround() || ((Player*)target)->GetBattleGround()->GetStatus() != STATUS_WAIT_LEAVE) &&
+            target->GetCharmerOrOwnerOrOwnGuid() == GetObjectGuid());
+}
+
 void Player::SetClientControl(Unit* target, uint8 allowMove)
 {
     WorldPacket data(SMSG_CLIENT_CONTROL_UPDATE, target->GetPackGUID().size() + 1);
@@ -20985,14 +21108,13 @@ void Player::Uncharm()
         charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_CHARM);
         charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_POSSESS);
         charm->RemoveSpellsCausingAura(SPELL_AURA_MOD_POSSESS_PET);
-        if (charm == GetMover())
-        {
-            SetMover(nullptr);
-            GetCamera().ResetView();
-            RemoveSpellsCausingAura(SPELL_AURA_MOD_INVISIBILITY);
-            SetCharm(nullptr);
-            SetClientControl(this, 1);
-        }
+    }
+
+    if (Unit* charm = GetCharm())
+    {
+        // try remove charm by spellid
+        if (uint32 spellid = charm->GetUInt32Value(UNIT_CREATED_BY_SPELL))
+            RemoveAurasDueToSpell(spellid);
     }
 }
 
@@ -21835,7 +21957,7 @@ InventoryResult Player::CanEquipUniqueItem(Item* pItem, uint8 eslot, uint32 limi
 InventoryResult Player::CanEquipUniqueItem(ItemPrototype const* itemProto, uint8 except_slot, uint32 limit_count) const
 {
     // check unique-equipped on item
-    if (itemProto->Flags & ITEM_FLAG_UNIQUE_EQUIPPED)
+    if (itemProto->Flags & ITEM_FLAG_UNIQUE_EQUIPPABLE)
     {
         // there is an equip limit on this item
         if (HasItemOrGemWithIdEquipped(itemProto->ItemId, 1, except_slot))
@@ -23343,4 +23465,10 @@ void Player::DoInteraction(ObjectGuid const& interactObjGuid)
         RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_USE);
     }
     SendForcedObjectUpdate();
+}
+
+void Player::ResetDeathTimer()
+{
+    // 6 minutes until repop at graveyard
+    m_deathTimer = 6 * MINUTE * IN_MILLISECONDS;
 }
