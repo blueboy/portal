@@ -39,8 +39,14 @@ class Unit;
 #define SMOOTH_PATH_STEP_SIZE   4.0f
 #define SMOOTH_PATH_SLOP        0.3f
 
-#define VERTEX_SIZE       3
-#define INVALID_POLYREF   0
+// How many points can be cutted
+// May occupt visual bugs when lenght > 20y
+#define SKIP_POINT_LIMIT        6
+#define LINE_FAULT              0.5f
+#define MAX_Z_DIFF              0.5f
+
+#define VERTEX_SIZE             3
+#define INVALID_POLYREF         0
 
 enum PathType
 {
@@ -49,7 +55,8 @@ enum PathType
     PATHFIND_SHORTCUT       = 0x0002,   // travel through obstacles, terrain, air, etc (old behavior)
     PATHFIND_INCOMPLETE     = 0x0004,   // we have partial path to follow - getting closer to target
     PATHFIND_NOPATH         = 0x0008,   // no valid path at all or error in generating one
-    PATHFIND_NOT_USING_PATH = 0x0010    // used when we are either flying/swiming or on map w/o mmaps
+    PATHFIND_NOT_USING_PATH = 0x0010,   // used when we are either flying/swiming or on map w/o mmaps
+    PATHFIND_SHORT          = 0x0020,   // path is longer or equal to its limited path length
 };
 
 class PathFinder
@@ -99,6 +106,7 @@ class PathFinder
         void setStartPosition(const Vector3& point) { m_startPosition = point; }
         void setEndPosition(const Vector3& point) { m_actualEndPosition = point; m_endPosition = point; }
         void setActualEndPosition(const Vector3& point) { m_actualEndPosition = point; }
+        void NormalizePath();
 
         void clear()
         {
@@ -118,7 +126,7 @@ class PathFinder
         void BuildPointPath(const float* startPoint, const float* endPoint);
         void BuildShortcut();
 
-        NavTerrain getNavTerrain(float x, float y, float z);
+        NavTerrain getNavTerrain(float x, float y, float z) const;
         void createFilter();
         void updateFilter();
 
@@ -127,7 +135,7 @@ class PathFinder
                              const dtPolyRef* visited, uint32 nvisited);
         bool getSteerTarget(const float* startPos, const float* endPos, float minTargetDist,
                             const dtPolyRef* path, uint32 pathSize, float* steerPos,
-                            unsigned char& steerPosFlag, dtPolyRef& steerPosRef);
+                            unsigned char& steerPosFlag, dtPolyRef& steerPosRef) const;
         dtStatus findSmoothPath(const float* startPos, const float* endPos,
                                 const dtPolyRef* polyPath, uint32 polyPathSize,
                                 float* smoothPath, int* smoothPathSize, uint32 smoothPathMaxSize);

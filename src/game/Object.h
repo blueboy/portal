@@ -127,7 +127,7 @@ class WorldUpdateCounter
         uint32 m_tmStart;
 };
 
-class MANGOS_DLL_SPEC Object
+class Object
 {
     public:
         virtual ~Object();
@@ -169,7 +169,7 @@ class MANGOS_DLL_SPEC Object
         bool isType(TypeMask mask) const { return !!(mask & m_objectType); }
 
         virtual void BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) const;
-        void SendCreateUpdateToPlayer(Player* player);
+        void SendCreateUpdateToPlayer(Player* player) const;
 
         // must be overwrite in appropriate subclasses (WorldObject, Item currently), or will crash
         virtual void AddToClientUpdateList();
@@ -383,7 +383,7 @@ class MANGOS_DLL_SPEC Object
 
         void BuildMovementUpdate(ByteBuffer* data, uint16 updateFlags) const;
         void BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* updateMask, Player* target) const;
-        void BuildUpdateDataForPlayer(Player* pl, UpdateDataMapType& update_players);
+        void BuildUpdateDataForPlayer(Player* pl, UpdateDataMapType& update_players) const;
 
         uint16 m_objectType;
 
@@ -420,7 +420,7 @@ class MANGOS_DLL_SPEC Object
 
 struct WorldObjectChangeAccumulator;
 
-class MANGOS_DLL_SPEC WorldObject : public Object
+class WorldObject : public Object
 {
         friend struct WorldObjectChangeAccumulator;
 
@@ -428,7 +428,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         // class is used to manipulate with WorldUpdateCounter
         // it is needed in order to get time diff between two object's Update() calls
-        class MANGOS_DLL_SPEC UpdateHelper
+        class UpdateHelper
         {
             public:
                 explicit UpdateHelper(WorldObject* obj) : m_obj(obj) {}
@@ -526,7 +526,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         InstanceData* GetInstanceData() const;
 
-        const char* GetName() const { return m_name.c_str(); }
+        char const* GetName() const { return m_name.c_str(); }
+        std::string const& GetNameStr() const { return m_name; }
         void SetName(const std::string& newname) { m_name = newname; }
 
         virtual const char* GetNameForLocaleIdx(int32 /*locale_idx*/) const { return GetName(); }
@@ -573,9 +574,9 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         virtual void CleanupsBeforeDelete();                // used in destructor or explicitly before mass creature delete to remove cross-references to already deleted units
 
-        virtual void SendMessageToSet(WorldPacket* data, bool self) const;
-        virtual void SendMessageToSetInRange(WorldPacket* data, float dist, bool self) const;
-        void SendMessageToSetExcept(WorldPacket* data, Player const* skipped_receiver) const;
+        virtual void SendMessageToSet(WorldPacket const& data, bool self) const;
+        virtual void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self) const;
+        void SendMessageToSetExcept(WorldPacket const& data, Player const* skipped_receiver) const;
 
         void MonsterSay(const char* text, uint32 language, Unit const* target = nullptr) const;
         void MonsterYell(const char* text, uint32 language, Unit const* target = nullptr) const;
@@ -587,8 +588,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         void PlayDirectSound(uint32 sound_id, Player const* target = nullptr) const;
         void PlayMusic(uint32 sound_id, Player const* target = nullptr) const;
 
-        void SendObjectDeSpawnAnim(ObjectGuid guid);
-        void SendGameObjectCustomAnim(ObjectGuid guid, uint32 animId = 0);
+        void SendObjectDeSpawnAnim(ObjectGuid guid) const;
+        void SendGameObjectCustomAnim(ObjectGuid guid, uint32 animId = 0) const;
 
         virtual bool IsHostileTo(Unit const* unit) const = 0;
         virtual bool IsFriendlyTo(Unit const* unit) const = 0;
@@ -618,7 +619,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         void RemoveFromClientUpdateList() override;
         void BuildUpdateData(UpdateDataMapType&) override;
 
-        Creature* SummonCreature(uint32 id, float x, float y, float z, float ang, TempSummonType spwtype, uint32 despwtime, bool asActiveObject = false, bool setRun = false);
+        Creature* SummonCreature(uint32 id, float x, float y, float z, float ang, TempSummonType spwtype, uint32 despwtime, bool asActiveObject = false, bool setRun = false, uint32 pathId = 0);
 
         bool isActiveObject() const { return m_isActiveObject || m_viewPoint.hasViewers(); }
         void SetActiveObjectState(bool active);

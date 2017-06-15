@@ -89,7 +89,7 @@ void WorldSession::HandleSetLfgCommentOpcode(WorldPacket& recv_data)
     DEBUG_LOG("LFG comment \"%s\"", comment.c_str());
 }
 
-void WorldSession::SendLfgSearchResults(LfgType type, uint32 entry)
+void WorldSession::SendLfgSearchResults(LfgType type, uint32 entry) const
 {
     WorldPacket data(SMSG_LFG_SEARCH_RESULTS);
     data << uint32(type);                                   // type
@@ -213,10 +213,10 @@ void WorldSession::SendLfgSearchResults(LfgType type, uint32 entry)
         }
     }
 
-    SendPacket(&data);
+    SendPacket(data);
 }
 
-void WorldSession::SendLfgJoinResult(LfgJoinResult result)
+void WorldSession::SendLfgJoinResult(LfgJoinResult result) const
 {
     WorldPacket data(SMSG_LFG_JOIN_RESULT, 0);
     data << uint32(result);
@@ -238,10 +238,10 @@ void WorldSession::SendLfgJoinResult(LfgJoinResult result)
         }*/
     }
 
-    SendPacket(&data);
+    SendPacket(data);
 }
 
-void WorldSession::SendLfgUpdate(bool isGroup, LfgUpdateType updateType, uint32 id)
+void WorldSession::SendLfgUpdate(bool isGroup, LfgUpdateType updateType, uint32 id) const
 {
     WorldPacket data(isGroup ? SMSG_LFG_UPDATE_PARTY : SMSG_LFG_UPDATE_PLAYER, 0);
     data << uint8(updateType);
@@ -268,5 +268,5 @@ void WorldSession::SendLfgUpdate(bool isGroup, LfgUpdateType updateType, uint32 
             data << uint32(id);
         data << "";
     }
-    SendPacket(&data);
+    SendPacket(data);
 }

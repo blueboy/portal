@@ -189,7 +189,7 @@ void Player::UpdateArmor()
     UpdateAttackPowerAndDamage();                           // armor dependent auras update for SPELL_AURA_MOD_ATTACK_POWER_OF_ARMOR
 }
 
-float Player::GetHealthBonusFromStamina()
+float Player::GetHealthBonusFromStamina() const
 {
     float stamina = GetStat(STAT_STAMINA);
 
@@ -199,7 +199,7 @@ float Player::GetHealthBonusFromStamina()
     return baseStam + (moreStam * 10.0f);
 }
 
-float Player::GetManaBonusFromIntellect()
+float Player::GetManaBonusFromIntellect() const
 {
     float intellect = GetStat(STAT_INTELLECT);
 
@@ -485,21 +485,22 @@ void Player::UpdateDefenseBonusesMod()
 
 void Player::UpdateBlockPercentage()
 {
-    // No block
     float value = 0.0f;
+    float real = 0.0f;
     if (CanBlock())
     {
         // Base value
         value = 5.0f;
-        // Modify value from defense skill
-        value += (int32(GetDefenseSkillValue()) - int32(GetMaxSkillValueForLevel())) * 0.04f;
         // Increase from SPELL_AURA_MOD_BLOCK_PERCENT aura
         value += GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_PERCENT);
         // Increase from rating
         value += GetRatingBonusValue(CR_BLOCK);
-        value = value < 0.0f ? 0.0f : value;
+        real = value;
+        // Set UI display value: modify value from defense skill against same level target
+        value += (int32(GetDefenseSkillValue()) - int32(GetMaxSkillValueForLevel())) * 0.04f;
     }
-    SetStatFloatValue(PLAYER_BLOCK_PERCENTAGE, value);
+    m_modBlockChance = real;
+    SetStatFloatValue(PLAYER_BLOCK_PERCENTAGE, std::max(0.0f, std::min(value, 100.0f)));
 }
 
 void Player::UpdateCritPercentage(WeaponAttackType attType)
@@ -529,10 +530,10 @@ void Player::UpdateCritPercentage(WeaponAttackType attType)
     }
 
     float value = GetTotalPercentageModValue(modGroup) + GetRatingBonusValue(cr);
+    m_modCritChance[attType] = value;
     // Modify crit from weapon skill and maximized defense skill of same level victim difference
     value += (int32(GetWeaponSkillValue(attType)) - int32(GetMaxSkillValueForLevel())) * 0.04f;
-    value = value < 0.0f ? 0.0f : value;
-    SetStatFloatValue(index, value);
+    SetStatFloatValue(index, std::max(0.0f, std::min(value, 100.0f)));
 }
 
 void Player::UpdateAllCritPercentages()
@@ -548,118 +549,83 @@ void Player::UpdateAllCritPercentages()
     UpdateCritPercentage(RANGED_ATTACK);
 }
 
-const float Player::m_diminishing_k[MAX_CLASSES] =
-{
-    0.9560f,  // Warrior
-    0.9560f,  // Paladin
-    0.9880f,  // Hunter
-    0.9880f,  // Rogue
-    0.9830f,  // Priest
-    0.9560f,  // DK
-    0.9880f,  // Shaman
-    0.9830f,  // Mage
-    0.9830f,  // Warlock
-    0.0f,     // ??
-    0.9720f   // Druid
-};
-
 void Player::UpdateParryPercentage()
 {
-    const float parry_cap[MAX_CLASSES] =
-    {
-        47.003525f,  // Warrior
-        47.003525f,  // Paladin
-        145.560408f,  // Hunter
-        145.560408f,  // Rogue
-        0.0f,       // Priest
-        47.003525f,  // DK
-        145.560408f,  // Shaman
-        0.0f,       // Mage
-        0.0f,       // Warlock
-        0.0f,       // ??
-        0.0f        // Druid
-    };
-
-    // No parry
     float value = 0.0f;
-    uint32 pclass = getClass() - 1;
-    if (CanParry() && parry_cap[pclass] > 0.0f)
+    float real = 0.0f;
+    if (CanParry())
     {
         // Base parry
-        float nondiminishing  = 5.0f;
-        // Parry from rating
-        float diminishing = GetRatingBonusValue(CR_PARRY);
-        // Modify value from defense skill (only bonus from defense rating diminishes)
-        nondiminishing += (GetSkillValue(SKILL_DEFENSE) - GetMaxSkillValueForLevel()) * 0.04f;
-        diminishing += (int32(GetRatingBonusValue(CR_DEFENSE_SKILL))) * 0.04f;
+        value  = 5.0f;
         // Parry from SPELL_AURA_MOD_PARRY_PERCENT aura
-        nondiminishing += GetTotalAuraModifier(SPELL_AURA_MOD_PARRY_PERCENT);
-        // apply diminishing formula to diminishing parry chance
-        value = nondiminishing + diminishing * parry_cap[pclass] /
-                (diminishing + parry_cap[pclass] * m_diminishing_k[pclass]);
-        value = value < 0.0f ? 0.0f : value;
+        value += GetTotalAuraModifier(SPELL_AURA_MOD_PARRY_PERCENT);
+        // Parry from rating
+        value += GetRatingBonusValue(CR_PARRY);
+        real = value;
+        // Set value for diminishing when in combat
+        m_modDodgeChanceDiminishing = GetRatingBonusValue(CR_PARRY);
+        // Set UI display value: modify value from defense skill against same level target
+        value += (int32(GetDefenseSkillValue()) - int32(GetMaxSkillValueForLevel())) * 0.04f;
     }
-    SetStatFloatValue(PLAYER_PARRY_PERCENTAGE, value);
+    // Set current dodge chance
+    m_modParryChance = real;
+    SetStatFloatValue(PLAYER_PARRY_PERCENTAGE, std::max(0.0f, std::min(value, 100.0f)));
 }
+
+// Base static dodge values in percentages (%)
+static const float PLAYER_BASE_DODGE[MAX_CLASSES] =
+{
+    0.0000f, // [0]  <Unused>
+    3.6640f, // [1]  Warrior
+    3.4943f, // [2]  Paladin
+   -4.0873f, // [3]  Hunter
+    2.0957f, // [4]  Rogue
+    3.4178f, // [5]  Priest
+    3.6640f, // [6]  DK
+    2.1080f, // [7]  Shaman
+    3.6587f, // [8]  Mage
+    2.4211f, // [9]  Warlock
+    0.0000f, // [10] <Unused>
+    5.6097f, // [11] Druid
+};
 
 void Player::UpdateDodgePercentage()
 {
-    const float dodge_cap[MAX_CLASSES] =
-    {
-        88.129021f,  // Warrior
-        88.129021f,  // Paladin
-        145.560408f,  // Hunter
-        145.560408f,  // Rogue
-        150.375940f,  // Priest
-        88.129021f,  // DK
-        145.560408f,  // Shaman
-        150.375940f,  // Mage
-        150.375940f,  // Warlock
-        0.0f,       // ??
-        116.890707f   // Druid
-    };
-
-    float diminishing = 0.0f, nondiminishing = 0.0f;
+    // Base dodge
+    float value = (getClass() < MAX_CLASSES) ? PLAYER_BASE_DODGE[getClass()] : 0.0f;
     // Dodge from agility
-    GetDodgeFromAgility(diminishing, nondiminishing);
-    // Modify value from defense skill (only bonus from defense rating diminishes)
-    nondiminishing += (GetSkillValue(SKILL_DEFENSE) - GetMaxSkillValueForLevel()) * 0.04f;
-    diminishing += (int32(GetRatingBonusValue(CR_DEFENSE_SKILL))) * 0.04f;
+    value += GetDodgeFromAgility(GetStat(STAT_AGILITY));
     // Dodge from SPELL_AURA_MOD_DODGE_PERCENT aura
-    nondiminishing += GetTotalAuraModifier(SPELL_AURA_MOD_DODGE_PERCENT);
+    value += GetTotalAuraModifier(SPELL_AURA_MOD_DODGE_PERCENT);
     // Dodge from rating
-    diminishing += GetRatingBonusValue(CR_DODGE);
-    // apply diminishing formula to diminishing dodge chance
-    uint32 pclass = getClass() - 1;
-    float value = nondiminishing + (diminishing * dodge_cap[pclass] /
-                                    (diminishing + dodge_cap[pclass] * m_diminishing_k[pclass]));
-    value = value < 0.0f ? 0.0f : value;
-    SetStatFloatValue(PLAYER_DODGE_PERCENTAGE, value);
+    value += GetRatingBonusValue(CR_DODGE);
+    // Set current dodge chance
+    m_modDodgeChance = value;
+    // Set value for diminishing when in combat
+    m_modDodgeChanceDiminishing = GetDodgeFromAgility((GetStat(STAT_AGILITY) - (GetCreateStat(STAT_AGILITY) * m_auraModifiersGroup[UNIT_MOD_STAT_START + STAT_AGILITY][BASE_PCT])));
+    m_modDodgeChanceDiminishing += GetRatingBonusValue(CR_DODGE);
+    // Set UI display value: modify value from defense skill against same level target
+    value += (int32(GetDefenseSkillValue()) - int32(GetMaxSkillValueForLevel())) * 0.04f;
+    SetStatFloatValue(PLAYER_DODGE_PERCENTAGE, std::max(0.0f, std::min(value, 100.0f)));
 }
 
 void Player::UpdateSpellCritChance(uint32 school)
 {
-    // For normal school set zero crit chance
-    if (school == SPELL_SCHOOL_NORMAL)
-    {
-        SetFloatValue(PLAYER_SPELL_CRIT_PERCENTAGE1, 0.0f);
-        return;
-    }
-    // For others recalculate it from:
     float crit = 0.0f;
-    // Crit from Intellect
+    // Base spell crit and spell crit from Intellect
     crit += GetSpellCritFromIntellect();
     // Increase crit from SPELL_AURA_MOD_SPELL_CRIT_CHANCE
     crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
     // Increase crit from SPELL_AURA_MOD_ALL_CRIT_CHANCE
     crit += GetTotalAuraModifier(SPELL_AURA_MOD_ALL_CRIT_CHANCE);
     // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
-    crit += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL, 1 << school);
+    crit += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL, (1 << school));
     // Increase crit from spell crit ratings
     crit += GetRatingBonusValue(CR_CRIT_SPELL);
-
-    // Store crit value
-    SetFloatValue(PLAYER_SPELL_CRIT_PERCENTAGE1 + school, crit);
+    // Set current crit chance
+    m_modSpellCritChance[school] = crit;
+    // Set UI display value:
+    SetFloatValue(PLAYER_SPELL_CRIT_PERCENTAGE1 + school, std::max(0.0f, std::min(crit, 100.0f)));
 }
 
 void Player::UpdateMeleeHitChances()
@@ -1012,10 +978,10 @@ void Pet::UpdateMaxHealth()
     UnitMods unitMod = UNIT_MOD_HEALTH;
     float stamina = GetStat(STAT_STAMINA) - GetCreateStat(STAT_STAMINA);
 
-    float value   = GetModifierValue(unitMod, BASE_VALUE) + GetCreateHealth();
-    value  *= GetModifierValue(unitMod, BASE_PCT);
-    value  += GetModifierValue(unitMod, TOTAL_VALUE) + stamina * 10.0f;
-    value  *= GetModifierValue(unitMod, TOTAL_PCT);
+    float value = GetModifierValue(unitMod, BASE_VALUE) + GetCreateHealth();
+    value *= GetModifierValue(unitMod, BASE_PCT);
+    value += GetModifierValue(unitMod, TOTAL_VALUE) + std::max((stamina - 20) * 10 + 20, 0.f);
+    value *= GetModifierValue(unitMod, TOTAL_PCT);
 
     SetMaxHealth((uint32)value);
 }
@@ -1026,9 +992,9 @@ void Pet::UpdateMaxPower(Powers power)
 
     float addValue = (power == POWER_MANA) ? GetStat(STAT_INTELLECT) - GetCreateStat(STAT_INTELLECT) : 0.0f;
 
-    float value  = GetModifierValue(unitMod, BASE_VALUE) + GetCreatePowers(power);
+    float value = GetModifierValue(unitMod, BASE_VALUE) + GetCreatePowers(power);
     value *= GetModifierValue(unitMod, BASE_PCT);
-    value += GetModifierValue(unitMod, TOTAL_VALUE) +  addValue * 15.0f;
+    value += GetModifierValue(unitMod, TOTAL_VALUE) + std::max((addValue - 20) * 15 + 20, 0.f);
     value *= GetModifierValue(unitMod, TOTAL_PCT);
 
     SetMaxPower(power, uint32(value));

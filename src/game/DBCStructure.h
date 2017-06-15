@@ -1327,15 +1327,6 @@ struct MapEntry
     bool IsBattleArena() const { return map_type == MAP_ARENA; }
     bool IsBattleGroundOrArena() const { return map_type == MAP_BATTLEGROUND || map_type == MAP_ARENA; }
 
-    bool IsMountAllowed() const
-    {
-        return !IsDungeon() ||
-               MapID == 209 || MapID == 269 || MapID == 309 || // TanarisInstance, CavernsOfTime, Zul'gurub
-               MapID == 509 || MapID == 534 || MapID == 560 || // AhnQiraj, HyjalPast, HillsbradPast
-               MapID == 568 || MapID == 580 || MapID == 595 || // ZulAman, Sunwell Plateau, Culling of Stratholme
-               MapID == 603 || MapID == 615 || MapID == 616;// Ulduar, The Obsidian Sanctum, The Eye Of Eternity
-    }
-
     bool IsContinent() const
     {
         return MapID == 0 || MapID == 1 || MapID == 530 || MapID == 571;
@@ -1721,7 +1712,7 @@ struct SpellEntry
         uint32    SpellVisual[2];                           // 131-132  m_spellVisualID
         uint32    SpellIconID;                              // 133      m_spellIconID
         uint32    activeIconID;                             // 134      m_activeIconID
-        // uint32    spellPriority;                         // 135      m_spellPriority not used
+        uint32    spellPriority;                            // 135      m_spellPriority not used
         char*     SpellName[16];                            // 136-151  m_name_lang
         // uint32    SpellNameFlag;                         // 152      m_name_flag not used
         char*     Rank[16];                                 // 153-168  m_nameSubtext_lang
@@ -1753,6 +1744,7 @@ struct SpellEntry
         // float   effectBonusCoefficient[3];               // 229-231  m_effectBonusCoefficient
         // uint32  spellDescriptionVariableID;              // 232      m_descriptionVariablesID
         uint32  SpellDifficultyId;                          // 233      m_difficulty (SpellDifficulty.dbc)
+        uint32  IsServerSide;
 
         // helpers
         int32 CalculateSimpleValue(SpellEffectIndex eff) const { return EffectBasePoints[eff] + int32(1); }
@@ -2180,8 +2172,18 @@ struct WorldSafeLocsEntry
 #pragma pack(pop)
 #endif
 
+struct ItemCategorySpellPair
+{
+    uint32 spellId;
+    uint32 itemId;
+    ItemCategorySpellPair(uint32 _spellId, uint32 _itemId) : spellId(_spellId), itemId(_itemId) {}
+    bool operator <(ItemCategorySpellPair const &pair) const { return spellId == pair.spellId ? itemId < pair.itemId : spellId < pair.spellId; }
+};
+
+typedef std::set<ItemCategorySpellPair> ItemSpellCategorySet;
+typedef std::map<uint32, ItemSpellCategorySet > ItemSpellCategoryStore;
 typedef std::set<uint32> SpellCategorySet;
-typedef std::map<uint32, SpellCategorySet > SpellCategoryStore;
+typedef std::map<uint32, SpellCategorySet> SpellCategoryStore;
 typedef std::set<uint32> PetFamilySpellsSet;
 typedef std::map<uint32, PetFamilySpellsSet > PetFamilySpellsStore;
 

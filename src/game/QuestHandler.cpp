@@ -27,7 +27,7 @@
 #include "GossipDef.h"
 #include "QuestDef.h"
 #include "ObjectAccessor.h"
-#include "ScriptMgr.h"
+#include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Group.h"
 
 // Playerbot mod:
@@ -57,7 +57,7 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
 
             if (!cr_questgiver->IsHostileTo(_player))       // not show quest status to enemies
             {
-                dialogStatus = sScriptMgr.GetDialogStatus(_player, cr_questgiver);
+                dialogStatus = sScriptDevAIMgr.GetDialogStatus(_player, cr_questgiver);
 
                 if (dialogStatus == DIALOG_STATUS_UNDEFINED)
                     dialogStatus = getDialogStatus(_player, cr_questgiver, DIALOG_STATUS_NONE);
@@ -67,7 +67,7 @@ void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPacket& recv_data)
         case TYPEID_GAMEOBJECT:
         {
             GameObject* go_questgiver = (GameObject*)questgiver;
-            dialogStatus = sScriptMgr.GetDialogStatus(_player, go_questgiver);
+            dialogStatus = sScriptDevAIMgr.GetDialogStatus(_player, go_questgiver);
 
             if (dialogStatus == DIALOG_STATUS_UNDEFINED)
                 dialogStatus = getDialogStatus(_player, go_questgiver, DIALOG_STATUS_NONE);
@@ -100,7 +100,7 @@ void WorldSession::HandleQuestgiverHelloOpcode(WorldPacket& recv_data)
     // Stop the npc if moving
     pCreature->StopMoving();
 
-    if (sScriptMgr.OnGossipHello(_player, pCreature))
+    if (sScriptDevAIMgr.OnGossipHello(_player, pCreature))
         return;
 
     _player->PrepareGossipMenu(pCreature, pCreature->GetCreatureInfo()->GossipMenuId);
@@ -185,7 +185,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPacket& recv_data)
             _player->PlayerTalkClass->CloseGossip();
 
             if (qInfo->GetSrcSpell() > 0)
-                _player->CastSpell(_player, qInfo->GetSrcSpell(), true);
+                _player->CastSpell(_player, qInfo->GetSrcSpell(), TRIGGERED_OLD_TRIGGERED);
 
             return;
         }
@@ -500,7 +500,7 @@ void WorldSession::HandleQuestPushResult(WorldPacket& recvPacket)
         WorldPacket data(MSG_QUEST_PUSH_RESULT, (8 + 1));
         data << ObjectGuid(guid);
         data << uint8(msg);                             // valid values: 0-8
-        pPlayer->GetSession()->SendPacket(&data);
+        pPlayer->GetSession()->SendPacket(data);
         _player->ClearDividerGuid();
     }
 }
@@ -511,7 +511,7 @@ void WorldSession::HandleQuestPushResult(WorldPacket& recvPacket)
  * @param questgiver - from whom
  * @param defstatus - initial set status (usually it will be called with DIALOG_STATUS_NONE) - must not be DIALOG_STATUS_UNDEFINED
  */
-uint32 WorldSession::getDialogStatus(Player* pPlayer, Object* questgiver, uint32 defstatus)
+uint32 WorldSession::getDialogStatus(const Player* pPlayer, const Object* questgiver, uint32 defstatus) const
 {
     MANGOS_ASSERT(defstatus != DIALOG_STATUS_UNDEFINED);
 
@@ -553,9 +553,9 @@ uint32 WorldSession::getDialogStatus(Player* pPlayer, Object* questgiver, uint32
         QuestStatus status = pPlayer->GetQuestStatus(quest_id);
 
         if (status == QUEST_STATUS_COMPLETE && !pPlayer->GetQuestRewardStatus(quest_id))
-            dialogStatusNew = pQuest->IsRepeatable() ? DIALOG_STATUS_REWARD_REP : DIALOG_STATUS_REWARD;
+            dialogStatusNew = pQuest->IsRepeatable() && pQuest->IsDailyOrWeekly() ? DIALOG_STATUS_REWARD_REP : DIALOG_STATUS_REWARD;
         else if (pQuest->IsAutoComplete() && pPlayer->CanTakeQuest(pQuest, false))
-            dialogStatusNew = pQuest->IsRepeatable() ? DIALOG_STATUS_AVAILABLE_REP : DIALOG_STATUS_AVAILABLE;
+            dialogStatusNew = pQuest->IsRepeatable() ? pQuest->IsDailyOrWeekly() ? DIALOG_STATUS_AVAILABLE_REP : DIALOG_STATUS_REWARD_REP : DIALOG_STATUS_AVAILABLE;
         else if (status == QUEST_STATUS_INCOMPLETE)
             dialogStatusNew = DIALOG_STATUS_INCOMPLETE;
 
@@ -582,7 +582,8 @@ uint32 WorldSession::getDialogStatus(Player* pPlayer, Object* questgiver, uint32
                 if (pPlayer->SatisfyQuestLevel(pQuest, false))
                 {
                     int32 lowLevelDiff = sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
-                    if (pQuest->IsAutoComplete() || (pQuest->IsRepeatable() && pPlayer->getQuestStatusMap()[quest_id].m_rewarded))
+
+                    if (pQuest->IsAutoComplete())
                     {
                         dialogStatusNew = DIALOG_STATUS_REWARD_REP;
                     }
@@ -615,7 +616,7 @@ void WorldSession::HandleQuestgiverStatusMultipleQuery(WorldPacket& /*recvPacket
     _player->SendQuestGiverStatusMultiple();
 }
 
-bool WorldSession::CanInteractWithQuestGiver(ObjectGuid guid, char const* descr)
+bool WorldSession::CanInteractWithQuestGiver(ObjectGuid guid, char const* descr) const
 {
     if (guid.IsCreatureOrVehicle())
     {

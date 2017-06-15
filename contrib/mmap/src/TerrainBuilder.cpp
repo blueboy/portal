@@ -98,10 +98,15 @@ namespace MMAP
 
         GridMapHeightHeader hheader;
         fseek(mapFile, fheader.heightMapOffset, SEEK_SET);
-        fread(&hheader, sizeof(GridMapHeightHeader), 1, mapFile);
 
-        bool haveTerrain = !(hheader.flags & MAP_HEIGHT_NO_HEIGHT);
-        bool haveLiquid = fheader.liquidMapOffset && !m_skipLiquid;
+        bool haveTerrain = false;
+        bool haveLiquid = false;
+
+        if (fread(&hheader, sizeof(GridMapHeightHeader), 1, mapFile) == 1)
+        {
+            haveTerrain = !(hheader.flags & MAP_HEIGHT_NO_HEIGHT);
+            haveLiquid = fheader.liquidMapOffset && !m_skipLiquid;
+        }
 
         // no data in this map file
         if (!haveTerrain && !haveLiquid)
@@ -115,6 +120,7 @@ namespace MMAP
         memset(holes, 0, sizeof(holes));
         uint8 liquid_type[16][16];
         memset(liquid_type, 0, sizeof(liquid_type));
+        bool liquid_type_loaded = false;
         G3D::Array<int> ltriangles;
         G3D::Array<int> ttriangles;
 
@@ -203,20 +209,30 @@ namespace MMAP
         {
             GridMapLiquidHeader lheader;
             fseek(mapFile, fheader.liquidMapOffset, SEEK_SET);
-            fread(&lheader, sizeof(GridMapLiquidHeader), 1, mapFile);
 
-            float* liquid_map = NULL;
+            float* liquid_map = nullptr;
 
-            if (!(lheader.flags & MAP_LIQUID_NO_TYPE))
-                fread(liquid_type, sizeof(liquid_type), 1, mapFile);
-
-            if (!(lheader.flags & MAP_LIQUID_NO_HEIGHT))
+            if (fread(&lheader, sizeof(GridMapLiquidHeader), 1, mapFile) == 1)
             {
-                liquid_map = new float [lheader.width * lheader.height];
-                fread(liquid_map, sizeof(float), lheader.width * lheader.height, mapFile);
+                if (!(lheader.flags & MAP_LIQUID_NO_TYPE))
+                {
+                    if (fread(liquid_type, sizeof(liquid_type), 1, mapFile) == 1)
+                        liquid_type_loaded = true;
+                }
+
+                if (!(lheader.flags & MAP_LIQUID_NO_HEIGHT))
+                {
+                    uint32 dataSize = lheader.width * lheader.height;
+                    liquid_map = new float[dataSize];
+                    if (fread(liquid_map, sizeof(float), dataSize, mapFile) != dataSize)
+                    {
+                        delete[] liquid_map;
+                        liquid_map = nullptr;
+                    }
+                }
             }
 
-            if (liquid_type && liquid_map)
+            if (liquid_map)
             {
                 int count = meshData.liquidVerts.size() / 3;
                 float xoffset = (float(tileX) - 32) * GRID_SIZE;
@@ -259,7 +275,7 @@ namespace MMAP
                     }
                 }
 
-                delete [] liquid_map;
+                delete[] liquid_map;
 
                 int indices[3], loopStart, loopEnd, loopInc, triInc;
                 getLoopVars(portion, loopStart, loopEnd, loopInc);
@@ -313,7 +329,7 @@ namespace MMAP
                 uint8 liquidType = MAP_LIQUID_TYPE_NO_WATER;
 
                 // if there is no liquid, don't use liquid
-                if (!liquid_type || !meshData.liquidVerts.size() || !ltriangles.size())
+                if (!liquid_type_loaded || !meshData.liquidVerts.size() || !ltriangles.size())
                     useLiquid = false;
                 else
                 {
@@ -631,7 +647,7 @@ namespace MMAP
                         uint8 type = NAV_EMPTY;
 
                         // convert liquid type to NavTerrain
-                        switch (liquid->GetType())
+                        switch (liquid->GetType() & 3)
                         {
                             case 0:
                             case 1:
@@ -826,26 +842,29 @@ namespace MMAP
             float p0[3], p1[3];
             int mid, tx, ty;
             float size;
-            if (10 != sscanf(buf, "%d %d,%d (%f %f %f) (%f %f %f) %f", &mid, &tx, &ty,
-                             &p0[0], &p0[1], &p0[2], &p1[0], &p1[1], &p1[2], &size))
+            if (sscanf(buf, "%d %d,%d (%f %f %f) (%f %f %f) %f", &mid, &tx, &ty,
+                &p0[0], &p0[1], &p0[2], &p1[0], &p1[1], &p1[2], &size) != 10)
+            {
+                continue;
+            }
+
+            if (mapID != mid || tileX != tx || tileY != ty)
                 continue;
 
-            if (mapID == mid, tileX == tx, tileY == ty)
-            {
-                meshData.offMeshConnections.append(p0[1]);
-                meshData.offMeshConnections.append(p0[2]);
-                meshData.offMeshConnections.append(p0[0]);
+            meshData.offMeshConnections.append(p0[1]);
+            meshData.offMeshConnections.append(p0[2]);
+            meshData.offMeshConnections.append(p0[0]);
 
-                meshData.offMeshConnections.append(p1[1]);
-                meshData.offMeshConnections.append(p1[2]);
-                meshData.offMeshConnections.append(p1[0]);
+            meshData.offMeshConnections.append(p1[1]);
+            meshData.offMeshConnections.append(p1[2]);
+            meshData.offMeshConnections.append(p1[0]);
 
-                meshData.offMeshConnectionDirs.append(1);          // 1 - both direction, 0 - one sided
-                meshData.offMeshConnectionRads.append(size);       // agent size equivalent
-                // can be used same way as polygon flags
-                meshData.offMeshConnectionsAreas.append((unsigned char)0xFF);
-                meshData.offMeshConnectionsFlags.append((unsigned short)0xFF);  // all movement masks can make this path
-            }
+            meshData.offMeshConnectionDirs.append(1);          // 1 - both direction, 0 - one sided
+            meshData.offMeshConnectionRads.append(size);       // agent size equivalent
+
+            // can be used same way as polygon flags
+            meshData.offMeshConnectionsAreas.append((unsigned char)0xFF);
+            meshData.offMeshConnectionsFlags.append((unsigned short)0xFF);  // all movement masks can make this path
         }
 
         delete [] buf;

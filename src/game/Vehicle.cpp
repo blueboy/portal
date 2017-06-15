@@ -38,7 +38,7 @@
 #include "Log.h"
 #include "Unit.h"
 #include "Creature.h"
-#include "AI/CreatureAI.h"
+#include "AI/BaseAI/CreatureAI.h"
 #include "ObjectMgr.h"
 #include "SQLStorages.h"
 #include "movement/MoveSplineInit.h"
@@ -134,7 +134,7 @@ void VehicleInfo::Initialize()
             DEBUG_LOG("VehicleInfo(of %s)::Initialize: Load vehicle accessory %s onto seat %u", m_owner->GetGuidStr().c_str(), summoned->GetGuidStr().c_str(), itr->seatId);
             m_accessoryGuids.insert(summoned->GetObjectGuid());
             int32 basepoint0 = itr->seatId + 1;
-            summoned->CastCustomSpell((Unit*)m_owner, SPELL_RIDE_VEHICLE_HARDCODED, &basepoint0, nullptr, nullptr, true);
+            summoned->CastCustomSpell((Unit*)m_owner, SPELL_RIDE_VEHICLE_HARDCODED, &basepoint0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
         }
     }
 
@@ -219,7 +219,7 @@ void VehicleInfo::Board(Unit* passenger, uint8 seat)
         pPlayer->RemovePet(PET_SAVE_AS_CURRENT);
 
         WorldPacket data(SMSG_ON_CANCEL_EXPECTED_RIDE_VEHICLE_AURA);
-        pPlayer->GetSession()->SendPacket(&data);
+        pPlayer->GetSession()->SendPacket(data);
 
         // SMSG_BREAK_TARGET (?)
     }
@@ -526,7 +526,7 @@ void VehicleInfo::ApplySeatMods(Unit* passenger, uint32 seatFlags)
             pVehicle->SetCharmerGuid(pPlayer->GetObjectGuid());
 
             pVehicle->addUnitState(UNIT_STAT_CONTROLLED);
-            pVehicle->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+            pVehicle->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_POSSESSED);
 
             pPlayer->SetClientControl(pVehicle, 1);
             pPlayer->SetMover(pVehicle);
@@ -597,7 +597,7 @@ void VehicleInfo::RemoveSeatMods(Unit* passenger, uint32 seatFlags)
             pPlayer->SetMover(nullptr);
 
             pVehicle->clearUnitState(UNIT_STAT_CONTROLLED);
-            pVehicle->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+            pVehicle->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_POSSESSED);
 
             // must be called after movement control unapplying
             pPlayer->GetCamera().ResetView();

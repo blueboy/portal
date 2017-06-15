@@ -61,7 +61,7 @@ enum EncounterFrameTypes                                    // only raid UI spec
     ENCOUNTER_FRAME_UNK7                    = 7             // sorting encounter units
 };
 
-class MANGOS_DLL_SPEC InstanceData
+class InstanceData
 {
     public:
 
@@ -136,7 +136,7 @@ class MANGOS_DLL_SPEC InstanceData
         virtual bool CheckConditionCriteriaMeet(Player const* source, uint32 instance_condition_id, WorldObject const* conditionSource, uint32 conditionSourceType) const;
 
         // Special UI unit frame - sent mostly for raid bosses
-        void SendEncounterFrame(uint32 type, ObjectGuid sourceGuid = ObjectGuid(), uint8 param1 = 0, uint8 param2 = 0);
+        void SendEncounterFrame(uint32 type, ObjectGuid sourceGuid = ObjectGuid(), uint8 param1 = 0, uint8 param2 = 0) const;
 };
 
 #endif

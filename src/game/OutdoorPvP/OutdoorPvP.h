@@ -89,6 +89,12 @@ class OutdoorPvP
         // Handle player kill
         void HandlePlayerKill(Player* killer, Player* victim);
 
+        // Handle script condition fulfillment
+        virtual bool IsConditionFulfilled(Player const* /*source*/, uint32 /*conditionId*/, WorldObject const* /*conditionSource*/, uint32 /*conditionSourceType*/) { return false; }
+
+        // Handle script condition state change by an external factor
+        virtual void HandleConditionStateChange(uint32 /*conditionId*/, bool /*state*/) {}
+
     protected:
 
         // Player related stuff
@@ -108,7 +114,7 @@ class OutdoorPvP
         void BuffTeam(Team team, uint32 spellId, bool remove = false);
 
         // get banner artkit based on controlling team
-        uint32 GetBannerArtKit(Team team, uint32 artKitAlliance = CAPTURE_ARTKIT_ALLIANCE, uint32 artKitHorde = CAPTURE_ARTKIT_HORDE, uint32 artKitNeutral = CAPTURE_ARTKIT_NEUTRAL);
+        uint32 GetBannerArtKit(Team team, uint32 artKitAlliance = CAPTURE_ARTKIT_ALLIANCE, uint32 artKitHorde = CAPTURE_ARTKIT_HORDE, uint32 artKitNeutral = CAPTURE_ARTKIT_NEUTRAL) const;
 
         // set banner visual
         void SetBannerVisual(const WorldObject* objRef, ObjectGuid goGuid, uint32 artKit, uint32 animId);

@@ -142,7 +142,7 @@ bool ChatHandler::HandleNotifyCommand(char* args)
 
     WorldPacket data(SMSG_NOTIFICATION, (str.size() + 1));
     data << str;
-    sWorld.SendGlobalMessage(&data);
+    sWorld.SendGlobalMessage(data);
 
     return true;
 }
@@ -233,7 +233,7 @@ bool ChatHandler::HandleGMVisibleCommand(char* args)
     }
 
     Player* player = m_session->GetPlayer();
-    SpellEntry const* invisibleAuraInfo = sSpellStore.LookupEntry(sWorld.getConfig(CONFIG_UINT32_GM_INVISIBLE_AURA));
+    SpellEntry const* invisibleAuraInfo = sSpellTemplate.LookupEntry<SpellEntry>(sWorld.getConfig(CONFIG_UINT32_GM_INVISIBLE_AURA));
     if (!invisibleAuraInfo || !IsSpellAppliesAura(invisibleAuraInfo))
         invisibleAuraInfo = nullptr;
 
@@ -249,7 +249,7 @@ bool ChatHandler::HandleGMVisibleCommand(char* args)
         m_session->SendNotification(LANG_INVISIBLE_INVISIBLE);
         player->SetGMVisible(false);
         if (invisibleAuraInfo)
-            player->CastSpell(player, invisibleAuraInfo, true);
+            player->CastSpell(player, invisibleAuraInfo, TRIGGERED_OLD_TRIGGERED);
     }
 
     return true;
@@ -350,7 +350,7 @@ bool ChatHandler::HandleGPSCommand(char* args)
     GridMapLiquidStatus res = terrain->getLiquidStatus(obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ(), MAP_ALL_LIQUIDS, &liquid_status);
     if (res)
     {
-        PSendSysMessage(LANG_LIQUID_STATUS, liquid_status.level, liquid_status.depth_level, liquid_status.type_flags, res);
+        PSendSysMessage(LANG_LIQUID_STATUS, liquid_status.level, liquid_status.depth_level, liquid_status.type_flags, uint32(res));
     }
 
     // Additional vmap debugging help
@@ -1494,13 +1494,13 @@ bool ChatHandler::HandleModifyMountCommand(char* args)
     data << (uint32)0;
     data << (uint8)0;                                       // new 2.1.0
     data << float(speed);
-    chr->SendMessageToSet(&data, true);
+    chr->SendMessageToSet(data, true);
 
     data.Initialize(SMSG_FORCE_SWIM_SPEED_CHANGE, (8 + 4 + 4));
     data << chr->GetPackGUID();
     data << (uint32)0;
     data << float(speed);
-    chr->SendMessageToSet(&data, true);
+    chr->SendMessageToSet(data, true);
 
     return true;
 }

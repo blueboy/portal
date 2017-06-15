@@ -19,13 +19,13 @@
 #ifndef __LISTENER_HPP_
 #define __LISTENER_HPP_
 
-#include <memory>
-#include <thread>
-#include <vector>
+#include "NetworkThread.hpp"
 
 #include <boost/asio.hpp>
 
-#include "NetworkThread.hpp"
+#include <memory>
+#include <thread>
+#include <vector>
 
 namespace MaNGOS
 {
@@ -33,8 +33,8 @@ namespace MaNGOS
     class Listener
     {
         private:
-            boost::asio::io_service m_service;
-            boost::asio::ip::tcp::acceptor m_acceptor;
+            std::unique_ptr<boost::asio::io_service> m_service;
+            std::unique_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
 
             std::thread m_acceptorThread;
             std::vector<std::unique_ptr<NetworkThread<SocketType>>> m_workerThreads;
@@ -62,7 +62,7 @@ namespace MaNGOS
             }
             
             void BeginAccept();
-            void OnAccept(NetworkThread<SocketType> *worker, SocketType *socket, const boost::system::error_code &ec);
+            void OnAccept(NetworkThread<SocketType> *worker, std::shared_ptr<SocketType> const& socket, const boost::system::error_code &ec);
 
         public:
             Listener(int port, int workerThreads);
@@ -71,41 +71,47 @@ namespace MaNGOS
 
     template <typename SocketType>
     Listener<SocketType>::Listener(int port, int workerThreads)
-        : m_acceptor(m_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port))
+        : m_service(new boost::asio::io_service()), m_acceptor(new boost::asio::ip::tcp::acceptor(*m_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)))
     {
         m_workerThreads.reserve(workerThreads);
-        for (int i = 0; i < workerThreads; ++i)
+        for (auto i = 0; i < workerThreads; ++i)
             m_workerThreads.push_back(std::unique_ptr<NetworkThread<SocketType>>(new NetworkThread<SocketType>));
 
         BeginAccept();
 
-        m_acceptorThread = std::thread([this]() { this->m_service.run(); });
+        m_acceptorThread = std::thread([this]() { this->m_service->run(); });
     }
 
     // FIXME - is this needed?
     template <typename SocketType>
     Listener<SocketType>::~Listener()
     {
-        m_service.stop();
-        m_acceptor.close();
+        m_acceptor->close();
+        m_service->stop();
         m_acceptorThread.join();
+        m_acceptor.reset();
+        m_service.reset();
     }
 
     template <typename SocketType>
     void Listener<SocketType>::BeginAccept()
     {
-        NetworkThread<SocketType> *worker = SelectWorker();
-        SocketType *socket = worker->CreateSocket();
+        auto worker = SelectWorker();
+        auto socket = worker->CreateSocket();
 
-        m_acceptor.async_accept(socket->GetAsioSocket(), [this,worker,socket](const boost::system::error_code &ec) { this->OnAccept(worker, socket, ec); });
+        m_acceptor->async_accept(socket->GetAsioSocket(),
+            [this, worker, socket] (const boost::system::error_code &ec)
+        {
+            this->OnAccept(worker, socket, ec);
+        });
     }
 
     template <typename SocketType>
-    void Listener<SocketType>::OnAccept(NetworkThread<SocketType> *worker, SocketType *socket, const boost::system::error_code &ec)
+    void Listener<SocketType>::OnAccept(NetworkThread<SocketType> *worker, std::shared_ptr<SocketType> const& socket, const boost::system::error_code &ec)
     {
         // an error has occurred
         if (ec)
-            worker->RemoveSocket(socket);
+            worker->RemoveSocket(socket.get());
         else
             socket->Open();
 

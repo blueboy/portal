@@ -2,7 +2,7 @@
 --
 -- Host: localhost    Database: mangos
 -- ------------------------------------------------------
--- Server version	5.5.32
+-- Server version   5.5.32
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -24,7 +24,7 @@ CREATE TABLE `db_version` (
   `version` varchar(120) DEFAULT NULL,
   `creature_ai_version` varchar(120) DEFAULT NULL,
   `cache_id` int(10) DEFAULT '0',
-  `required_12941_01_mangos_event_linkedto` bit(1) DEFAULT NULL
+  `required_13954_02_mangos_gameobjects` bit(1) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Used DB version notes';
 
 --
@@ -146,6 +146,7 @@ CREATE TABLE `areatrigger_teleport` (
   `target_position_y` float NOT NULL DEFAULT '0',
   `target_position_z` float NOT NULL DEFAULT '0',
   `target_orientation` float NOT NULL DEFAULT '0',
+  `condition_id` INT(11) unsigned NOT NULL default '0',
   PRIMARY KEY (`id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Trigger System';
 
@@ -820,7 +821,8 @@ CREATE TABLE `creature` (
   `position_y` float NOT NULL DEFAULT '0',
   `position_z` float NOT NULL DEFAULT '0',
   `orientation` float NOT NULL DEFAULT '0',
-  `spawntimesecs` int(10) unsigned NOT NULL DEFAULT '120',
+  `spawntimesecsmin` int(10) unsigned NOT NULL DEFAULT '120' COMMENT 'Creature respawn time minimum',
+  `spawntimesecsmax` int(10) unsigned NOT NULL DEFAULT '120' COMMENT 'Creature respawn time maximum',
   `spawndist` float NOT NULL DEFAULT '5',
   `currentwaypoint` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `curhealth` int(10) unsigned NOT NULL DEFAULT '1',
@@ -1208,6 +1210,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `creature_movement_template`;
 CREATE TABLE `creature_movement_template` (
   `entry` mediumint(8) unsigned NOT NULL COMMENT 'Creature entry',
+  `pathId` int(11) unsigned NOT NULL DEFAULT '0' COMMENT 'Path ID for entry',
   `point` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `position_x` float NOT NULL DEFAULT '0',
   `position_y` float NOT NULL DEFAULT '0',
@@ -1224,7 +1227,7 @@ CREATE TABLE `creature_movement_template` (
   `orientation` float NOT NULL DEFAULT '0',
   `model1` mediumint(9) NOT NULL DEFAULT '0',
   `model2` mediumint(9) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`entry`,`point`)
+  PRIMARY KEY (`entry`,`pathId`,`point`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Creature waypoint system';
 
 --
@@ -1520,6 +1523,7 @@ CREATE TABLE `dbscripts_on_creature_movement` (
   `command` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `datalong` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `datalong2` int(10) unsigned NOT NULL DEFAULT '0',
+  `datalong3` int(11) unsigned NOT NULL DEFAULT '0',
   `buddy_entry` int(10) unsigned NOT NULL DEFAULT '0',
   `search_radius` int(10) unsigned NOT NULL DEFAULT '0',
   `data_flags` tinyint(3) unsigned NOT NULL DEFAULT '0',
@@ -1563,6 +1567,26 @@ DROP TABLE IF EXISTS dbscripts_on_spell;
 CREATE TABLE dbscripts_on_spell LIKE dbscripts_on_creature_movement;
 DROP TABLE IF EXISTS dbscripts_on_creature_death;
 CREATE TABLE dbscripts_on_creature_death LIKE dbscripts_on_creature_movement;
+
+--
+-- Table structure for table `dbscript_string_template`
+--
+
+DROP TABLE IF EXISTS `dbscript_string_template`;
+CREATE TABLE `dbscript_string_template` (
+  `id` int(11) unsigned NOT NULL COMMENT 'Id of template' AUTO_INCREMENT,
+  `string_id` int(11) NOT NULL DEFAULT '0' COMMENT 'db_script_string id',
+  PRIMARY KEY (`id`,`string_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='DBScript system';
+
+--
+-- Dumping data for table `dbscript_string_template`
+--
+
+LOCK TABLES `dbscript_string_template` WRITE;
+/*!40000 ALTER TABLE `dbscript_string_template` DISABLE KEYS */;
+/*!40000 ALTER TABLE `dbscript_string_template` ENABLE KEYS */;
+UNLOCK TABLES;
 
 --
 -- Table structure for table `disenchant_loot_template`
@@ -1713,8 +1737,8 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `game_event`;
 CREATE TABLE `game_event` (
   `entry` mediumint(8) unsigned NOT NULL COMMENT 'Entry of the game event',
-  `start_time` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' COMMENT 'Absolute start date, the event will never start before',
-  `end_time` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' COMMENT 'Absolute end date, the event will never start afler',
+  `start_time` DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT 'Absolute start date, the event will never start before',
+  `end_time` DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00' COMMENT 'Absolute end date, the event will never start afler',
   `occurence` bigint(20) unsigned NOT NULL DEFAULT '86400' COMMENT 'Delay in minutes between occurences of the event',
   `length` bigint(20) unsigned NOT NULL DEFAULT '43200' COMMENT 'Length in minutes of the event',
   `holiday` mediumint(8) unsigned NOT NULL DEFAULT '0' COMMENT 'Client side holiday id',
@@ -1936,7 +1960,8 @@ CREATE TABLE `gameobject` (
   `rotation1` float NOT NULL DEFAULT '0',
   `rotation2` float NOT NULL DEFAULT '0',
   `rotation3` float NOT NULL DEFAULT '0',
-  `spawntimesecs` int(11) NOT NULL DEFAULT '0',
+  `spawntimesecsmin` int(11) NOT NULL DEFAULT '0' COMMENT 'GameObject respawn time minimum',
+  `spawntimesecsmax` int(11) NOT NULL DEFAULT '0' COMMENT 'Gameobject respawn time maximum',
   `animprogress` tinyint(3) unsigned NOT NULL DEFAULT '0',
   `state` tinyint(3) unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`guid`),
@@ -2077,6 +2102,7 @@ CREATE TABLE `gameobject_template` (
   `unk1` varchar(100) NOT NULL DEFAULT '',
   `faction` smallint(5) unsigned NOT NULL DEFAULT '0',
   `flags` int(10) unsigned NOT NULL DEFAULT '0',
+  `ExtraFlags` int(10) unsigned NOT NULL DEFAULT '0',
   `size` float NOT NULL DEFAULT '1',
   `questItem1` int(11) unsigned NOT NULL DEFAULT '0',
   `questItem2` int(11) unsigned NOT NULL DEFAULT '0',
@@ -2108,6 +2134,7 @@ CREATE TABLE `gameobject_template` (
   `data21` int(10) unsigned NOT NULL DEFAULT '0',
   `data22` int(10) unsigned NOT NULL DEFAULT '0',
   `data23` int(10) unsigned NOT NULL DEFAULT '0',
+  `CustomData1` int(10) unsigned NOT NULL DEFAULT '0',
   `mingold` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `maxgold` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `ScriptName` varchar(64) NOT NULL DEFAULT '',
@@ -2868,6 +2895,7 @@ CREATE TABLE `instance_template` (
   `levelMin` tinyint(3) unsigned NOT NULL DEFAULT '0',
   `levelMax` tinyint(3) unsigned NOT NULL DEFAULT '0',
   `ScriptName` varchar(128) NOT NULL DEFAULT '',
+  `mountAllowed` tinyint(3) unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`map`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -2877,6 +2905,96 @@ CREATE TABLE `instance_template` (
 
 LOCK TABLES `instance_template` WRITE;
 /*!40000 ALTER TABLE `instance_template` DISABLE KEYS */;
+INSERT INTO `instance_template`
+  (`map`, `parent`, `levelMin`, `levelMax`, `ScriptName`, `mountAllowed`)
+VALUES
+  (30, 0, 10, 0, '', 0),
+  (33, 0, 10, 0, '', 0),
+  (34, 0, 15, 0, '', 0),
+  (36, 0, 10, 0, '', 1),
+  (43, 0, 10, 0, '', 0),
+  (44, 0, 1, 0, '', 0),
+  (47, 0, 15, 0, '', 0),
+  (48, 0, 10, 0, '', 0),
+  (70, 0, 30, 0, '', 0),
+  (90, 0, 15, 0, '', 0),
+  (109, 0, 35, 0, '', 0),
+  (129, 0, 25, 0, '', 0),
+  (169, 0, 1, 0, '', 0),
+  (189, 0, 20, 0, '', 0),
+  (209, 0, 35, 0, '', 1),
+  (229, 0, 45, 0, '', 0),
+  (230, 0, 40, 0, '', 0),
+  (249, 0, 80, 0, '', 0),
+  (269, 0, 66, 0, '', 1),
+  (289, 0, 45, 0, '', 0),
+  (309, 0, 50, 0, '', 1),
+  (329, 0, 45, 0, '', 0),
+  (349, 0, 30, 0, '', 0),
+  (389, 0, 8, 0, '', 0),
+  (409, 0, 50, 0, '', 0),
+  (429, 0, 45, 0, '', 0),
+  (469, 0, 60, 0, '', 0),
+  (489, 0, 10, 0, '', 0),
+  (509, 0, 60, 0, '', 1),
+  (529, 0, 10, 0, '', 0),
+  (531, 0, 60, 0, '', 0),
+  (532, 0, 68, 0, '', 0),
+  (533, 0, 80, 0, '', 0),
+  (534, 0, 70, 0, '', 1),
+  (540, 0, 55, 0, '', 0),
+  (542, 0, 55, 0, '', 0),
+  (543, 0, 55, 0, '', 0),
+  (544, 0, 65, 0, '', 0),
+  (545, 0, 55, 0, '', 0),
+  (546, 0, 55, 0, '', 0),
+  (547, 0, 55, 0, '', 0),
+  (548, 0, 70, 0, '', 0),
+  (550, 0, 70, 0, '', 0),
+  (552, 0, 68, 0, '', 0),
+  (553, 0, 68, 0, '', 0),
+  (554, 0, 68, 0, '', 0),
+  (555, 0, 65, 0, '', 0),
+  (556, 0, 55, 0, '', 0),
+  (557, 0, 55, 0, '', 0),
+  (558, 0, 55, 0, '', 0),
+  (559, 0, 10, 0, '', 0),
+  (560, 0, 66, 0, '', 1),
+  (562, 0, 10, 0, '', 0),
+  (564, 0, 70, 0, '', 1),
+  (565, 0, 65, 0, '', 0),
+  (566, 0, 10, 0, '', 0),
+  (568, 0, 70, 0, '', 1),
+  (572, 0, 10, 0, '', 0),
+  (574, 0, 70, 72, '', 0),
+  (575, 0, 80, 80, '', 0),
+  (576, 0, 70, 72, '', 0),
+  (578, 0, 80, 80, '', 1),
+  (580, 0, 70, 0, '', 1),
+  (585, 0, 70, 0, '', 0),
+  (595, 0, 74, 80, '', 1),
+  (598, 0, 0, 0, '', 0),
+  (599, 0, 70, 0, '', 0),
+  (600, 0, 70, 0, '', 0),
+  (601, 0, 80, 80, '', 0),
+  (602, 0, 70, 0, '', 0),
+  (603, 0, 80, 0, '', 1),
+  (604, 0, 71, 80, '', 0),
+  (607, 0, 71, 0, '', 0),
+  (608, 0, 70, 80, '', 0),
+  (615, 0, 80, 0, '', 1),
+  (616, 0, 80, 0, '', 1),
+  (617, 0, 80, 80, '', 0),
+  (618, 0, 80, 80, '', 0),
+  (619, 0, 68, 80, '', 0),
+  (624, 0, 80, 0, '', 0),
+  (631, 0, 80, 0, '', 1),
+  (632, 0, 75, 0, '', 0),
+  (649, 0, 80, 0, '', 0),
+  (650, 0, 75, 0, '', 0),
+  (658, 0, 75, 0, '', 1),
+  (668, 0, 75, 0, '', 0),
+  (724, 0, 80, 80, '', 1);
 /*!40000 ALTER TABLE `instance_template` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -4836,6 +4954,7 @@ CREATE TABLE `npc_trainer` (
   `reqskill` smallint(5) unsigned NOT NULL DEFAULT '0',
   `reqskillvalue` smallint(5) unsigned NOT NULL DEFAULT '0',
   `reqlevel` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `condition_id` INT(11) unsigned NOT NULL default '0',
   UNIQUE KEY `entry_spell` (`entry`,`spell`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -4860,6 +4979,7 @@ CREATE TABLE `npc_trainer_template` (
   `reqskill` smallint(5) unsigned NOT NULL DEFAULT '0',
   `reqskillvalue` smallint(5) unsigned NOT NULL DEFAULT '0',
   `reqlevel` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `condition_id` INT(11) unsigned NOT NULL default '0',
   UNIQUE KEY `entry_spell` (`entry`,`spell`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -15394,7 +15514,7 @@ INSERT INTO `spell_bonus_data` VALUES
 (8042,  0.3858, 0,       0,     0,     'Shaman - Earth Shock'),
 (8050,  0.2142, 0.1,     0,     0,     'Shaman - Flame Shock'),
 (10444, 0,      0,       0,     0,     'Shaman - Flametongue Attack'),
-(8026,  0.1,    0,       0,     0,     'Shaman - Flametongue Weapon Proc'),
+(8026,  3.85,   0,       0,     0,     'Shaman - Flametongue Weapon Proc'),
 (8056,  0.3858, 0,       0,     0,     'Shaman - Frost Shock'),
 (8034,  0.1,    0,       0,     0,     'Shaman - Frostbrand Attack Rank 1'),
 (5672,  0.08272,0,       0,     0,     'Shaman - Healing Stream Totem Aura'),

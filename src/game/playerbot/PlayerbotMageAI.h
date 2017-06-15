@@ -71,7 +71,7 @@ enum MageSpells
 };
 //class Player;
 
-class MANGOS_DLL_SPEC PlayerbotMageAI : PlayerbotClassAI
+class PlayerbotMageAI : PlayerbotClassAI
 {
 public:
     PlayerbotMageAI(Player * const master, Player * const bot, PlayerbotAI * const ai);

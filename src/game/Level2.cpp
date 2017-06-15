@@ -26,7 +26,7 @@
 #include "TemporarySummon.h"
 #include "Totem.h"
 #include "Pet.h"
-#include "AI/CreatureAI.h"
+#include "AI/BaseAI/CreatureAI.h"
 #include "GameObject.h"
 #include "Opcodes.h"
 #include "Chat.h"
@@ -874,7 +874,7 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
 
     GameObject* target = m_session->GetPlayer()->GetMap()->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, id, lowguid));
 
-    PSendSysMessage(LANG_GAMEOBJECT_DETAIL, lowguid, goI->name, lowguid, id, x, y, z, mapid, o);
+    PSendSysMessage(LANG_GAMEOBJECT_DETAIL, lowguid, goI->name, lowguid, id, x, y, z, uint32(mapid), o);
 
     if (target)
     {
@@ -890,9 +890,9 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
         ShowNpcOrGoSpawnInformation<GameObject>(target->GetGUIDLow());
 
         if (target->GetGoType() == GAMEOBJECT_TYPE_DOOR)
-            PSendSysMessage(LANG_COMMAND_GO_STATUS_DOOR, target->GetGoState(), target->getLootState(), GetOnOffStr(target->IsCollisionEnabled()), goI->door.startOpen ? "open" : "closed");
+            PSendSysMessage(LANG_COMMAND_GO_STATUS_DOOR, uint32(target->GetGoState()), uint32(target->getLootState()), GetOnOffStr(target->IsCollisionEnabled()), goI->door.startOpen ? "open" : "closed");
         else
-            PSendSysMessage(LANG_COMMAND_GO_STATUS, target->GetGoState(), target->getLootState(), GetOnOffStr(target->IsCollisionEnabled()));
+            PSendSysMessage(LANG_COMMAND_GO_STATUS, uint32(target->GetGoState()), uint32(target->getLootState()), GetOnOffStr(target->IsCollisionEnabled()));
     }
     return true;
 }
@@ -1060,8 +1060,8 @@ bool ChatHandler::HandleGameObjectAddCommand(char* args)
     if (!id)
         return false;
 
-    int32 spawntimeSecs;
-    if (!ExtractOptInt32(&args, spawntimeSecs, 0))
+    int32 spawntimeSecsmin;
+    if (!ExtractOptInt32(&args, spawntimeSecsmin, 0))
         return false;
 
     const GameObjectInfo* gInfo = ObjectMgr::GetGameObjectInfo(id);
@@ -1104,8 +1104,8 @@ bool ChatHandler::HandleGameObjectAddCommand(char* args)
         return false;
     }
 
-    if (spawntimeSecs)
-        pGameObj->SetRespawnTime(spawntimeSecs);
+    if (spawntimeSecsmin)
+        pGameObj->SetRespawnTime(spawntimeSecsmin);
 
     // fill the gameobject data and save to the db
     pGameObj->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), plr->GetPhaseMaskForSpawn());
@@ -1719,7 +1719,8 @@ bool ChatHandler::HandleNpcAIInfoCommand(char* /*args*/)
 
     std::string strScript = pTarget->GetScriptName();
     std::string strAI = pTarget->GetAIName();
-    char const* cstrAIClass = pTarget->AI() ? typeid(*pTarget->AI()).name() : " - ";
+    CreatureAI* ai = pTarget->AI(); // fix OSX warning
+    char const* cstrAIClass = ai ? typeid(*ai).name() : " - ";
 
     PSendSysMessage(LANG_NPC_AI_NAMES,
                     strAI.empty() ? " - " : strAI.c_str(),
@@ -2212,7 +2213,7 @@ bool ChatHandler::HandleNpcTameCommand(char* /*args*/)
         return false;
     }
 
-    player->CastSpell(creatureTarget, 13481, true);         // Tame Beast, triggered effect
+    player->CastSpell(creatureTarget, 13481, TRIGGERED_OLD_TRIGGERED);         // Tame Beast, triggered effect
     return true;
 }
 // npc phasemask handling
@@ -2571,7 +2572,7 @@ bool ChatHandler::HandlePInfoCommand(char* args)
 
     std::string nameLink = playerLink(target_name);
 
-    PSendSysMessage(LANG_PINFO_ACCOUNT, (target ? "" : GetMangosString(LANG_OFFLINE)), nameLink.c_str(), target_guid.GetCounter(), username.c_str(), accId, security, last_ip.c_str(), last_login.c_str(), latency);
+    PSendSysMessage(LANG_PINFO_ACCOUNT, (target ? "" : GetMangosString(LANG_OFFLINE)), nameLink.c_str(), target_guid.GetCounter(), username.c_str(), accId, uint32(security), last_ip.c_str(), last_login.c_str(), latency);
 
     std::string timeStr = secsToTimeString(total_player_time, true, true);
     uint32 gold = money / GOLD;
@@ -2881,7 +2882,7 @@ bool ChatHandler::HandleWpAddCommand(char* args)
 
     Creature* targetCreature = getSelectedCreature();
     WaypointPathOrigin wpDestination = PATH_NO_PATH;        ///< into which storage
-    int32 wpPathId = 0;                                     ///< along which path
+    uint32 wpPathId = 0;                                    ///< along which path
     uint32 wpPointId = 0;                                   ///< pointId if a waypoint was selected, in this case insert after
     Creature* wpOwner;
 
@@ -2949,7 +2950,7 @@ bool ChatHandler::HandleWpAddCommand(char* args)
 
     if (wpDestination == PATH_NO_PATH)                      // No Waypoint selected, parse additional params
     {
-        if (ExtractOptInt32(&args, wpPathId, 0))            // Fill path-id and source
+        if (ExtractOptUInt32(&args, wpPathId, 0))           // Fill path-id and source
         {
             uint32 src = (uint32)PATH_NO_PATH;
             if (ExtractOptUInt32(&args, src, src))
@@ -2987,7 +2988,7 @@ bool ChatHandler::HandleWpAddCommand(char* args)
 
     float x, y, z;
     m_session->GetPlayer()->GetPosition(x, y, z);
-    if (!sWaypointMgr.AddNode(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), wpPointId, wpDestination, x, y, z))
+    if (!sWaypointMgr.AddNode(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), wpPathId, wpPointId, wpDestination, x, y, z, m_session->GetPlayer()->GetOrientation()))
     {
         PSendSysMessage(LANG_WAYPOINT_NOTCREATED, wpPointId, wpOwner->GetGuidStr().c_str(), wpPathId, WaypointManager::GetOriginString(wpDestination).c_str());
         SetSentErrorMessage(true);
@@ -3076,7 +3077,7 @@ bool ChatHandler::HandleWpModifyCommand(char* args)
     Creature* wpOwner;                                      // Who moves along the waypoint
     uint32 wpId = 0;
     WaypointPathOrigin wpSource = PATH_NO_PATH;
-    int32 wpPathId = 0;
+    uint32 wpPathId = 0;
 
     if (targetCreature)
     {
@@ -3282,14 +3283,14 @@ bool ChatHandler::HandleWpShowCommand(char* args)
     std::string subCmd = subCmd_str;                        ///< info, on, off, first, last
 
     uint32 dbGuid = 0;
-    int32 wpPathId = 0;
+    uint32 wpPathId = 0;
     WaypointPathOrigin wpOrigin = PATH_NO_PATH;
 
     // User selected an npc?
     Creature* targetCreature = getSelectedCreature();
     if (targetCreature)
     {
-        if (ExtractOptInt32(&args, wpPathId, 0))            // Fill path-id and source
+        if (ExtractOptUInt32(&args, wpPathId, 0))           // Fill path-id and source
         {
             uint32 src;
             if (ExtractOptUInt32(&args, src, (uint32)PATH_NO_PATH))
@@ -3301,7 +3302,7 @@ bool ChatHandler::HandleWpShowCommand(char* args)
         if (!ExtractUInt32(&args, dbGuid))                  // No creature selected and no dbGuid provided
             return false;
 
-        if (ExtractOptInt32(&args, wpPathId, 0))            // Fill path-id and source
+        if (ExtractOptUInt32(&args, wpPathId, 0))           // Fill path-id and source
         {
             uint32 src = (uint32)PATH_NO_PATH;
             if (ExtractOptUInt32(&args, src, src))
@@ -3479,7 +3480,7 @@ bool ChatHandler::HandleWpExportCommand(char* args)
 
     Creature* wpOwner;
     WaypointPathOrigin wpOrigin = PATH_NO_PATH;
-    int32 wpPathId = 0;
+    uint32 wpPathId = 0;
 
     if (Creature* targetCreature = getSelectedCreature())
     {
@@ -3553,7 +3554,7 @@ bool ChatHandler::HandleWpExportCommand(char* args)
 
     if (wpOrigin == PATH_NO_PATH)                           // No WP selected, Extract optional arguments
     {
-        if (ExtractOptInt32(&args, wpPathId, 0))            // Fill path-id and source
+        if (ExtractOptUInt32(&args, wpPathId, 0))           // Fill path-id and source
         {
             uint32 src = (uint32)PATH_NO_PATH;
             if (ExtractOptUInt32(&args, src, src))
@@ -4030,7 +4031,7 @@ void ChatHandler::HandleLearnSkillRecipesHelper(Player* player, uint32 skill_id)
         if (skillLine->classmask && (skillLine->classmask & classmask) == 0)
             continue;
 
-        SpellEntry const* spellInfo = sSpellStore.LookupEntry(skillLine->spellId);
+        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(skillLine->spellId);
         if (!spellInfo || !SpellMgr::IsSpellValid(spellInfo, player, false))
             continue;
 
@@ -4358,11 +4359,11 @@ void ChatHandler::ShowPoolListHelper(uint16 pool_id)
     PoolTemplateData const& pool_template = sPoolMgr.GetPoolTemplate(pool_id);
     if (m_session)
         PSendSysMessage(LANG_POOL_ENTRY_LIST_CHAT,
-                        pool_id, pool_id, pool_template.description.c_str(), pool_template.AutoSpawn ? 1 : 0, pool_template.MaxLimit,
+                        uint32(pool_id), uint32(pool_id), pool_template.description.c_str(), pool_template.AutoSpawn ? 1 : 0, pool_template.MaxLimit,
                         sPoolMgr.GetPoolCreatures(pool_id).size(), sPoolMgr.GetPoolGameObjects(pool_id).size(), sPoolMgr.GetPoolPools(pool_id).size());
     else
         PSendSysMessage(LANG_POOL_ENTRY_LIST_CONSOLE,
-                        pool_id, pool_template.description.c_str(), pool_template.AutoSpawn ? 1 : 0, pool_template.MaxLimit,
+                        uint32(pool_id), pool_template.description.c_str(), pool_template.AutoSpawn ? 1 : 0, pool_template.MaxLimit,
                         sPoolMgr.GetPoolCreatures(pool_id).size(), sPoolMgr.GetPoolGameObjects(pool_id).size(), sPoolMgr.GetPoolPools(pool_id).size());
 }
 

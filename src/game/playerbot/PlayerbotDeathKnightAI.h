@@ -62,7 +62,7 @@ enum DeathKnightSpells
 };
 //class Player;
 
-class MANGOS_DLL_SPEC PlayerbotDeathKnightAI : PlayerbotClassAI
+class PlayerbotDeathKnightAI : PlayerbotClassAI
 {
 public:
     PlayerbotDeathKnightAI(Player * const master, Player * const bot, PlayerbotAI * const ai);

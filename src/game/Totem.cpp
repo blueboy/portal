@@ -22,7 +22,7 @@
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
-#include "AI/CreatureAI.h"
+#include "AI/BaseAI/CreatureAI.h"
 #include "InstanceData.h"
 
 Totem::Totem() : Creature(CREATURE_SUBTYPE_TOTEM)
@@ -65,6 +65,10 @@ bool Totem::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* 
 
     LoadCreatureAddon(false);
 
+    SetCanDodge(false);
+    SetCanParry(false);
+    SetCanBlock(false);
+
     return true;
 }
 
@@ -93,8 +97,8 @@ void Totem::Summon(Unit* owner)
     owner->GetMap()->Add((Creature*)this);
     AIM_Initialize();
 
-    if (owner->GetTypeId() == TYPEID_UNIT && ((Creature*)owner)->AI())
-        ((Creature*)owner)->AI()->JustSummoned((Creature*)this);
+    if (owner->AI())
+        owner->AI()->JustSummoned((Creature*)this);
 
     // there are some totems, which exist just for their visual appeareance
     if (!GetSpell())
@@ -103,10 +107,10 @@ void Totem::Summon(Unit* owner)
     switch (m_type)
     {
         case TOTEM_PASSIVE:
-            CastSpell(this, GetSpell(), true);
+            CastSpell(this, GetSpell(), TRIGGERED_OLD_TRIGGERED);
             break;
         case TOTEM_STATUE:
-            CastSpell(GetOwner(), GetSpell(), true);
+            CastSpell(GetOwner(), GetSpell(), TRIGGERED_OLD_TRIGGERED);
             break;
         default: break;
     }
@@ -139,8 +143,8 @@ void Totem::UnSummon()
             }
         }
 
-        if (owner->GetTypeId() == TYPEID_UNIT && ((Creature*)owner)->AI())
-            ((Creature*)owner)->AI()->SummonedCreatureDespawn((Creature*)this);
+        if (owner->AI())
+            owner->AI()->SummonedCreatureDespawn((Creature*)this);
     }
 
     // any totem unsummon look like as totem kill, req. for proper animation
@@ -158,9 +162,10 @@ void Totem::SetOwner(Unit* owner)
     SetLevel(owner->getLevel());
 }
 
-Unit* Totem::GetOwner()
+Unit* Totem::GetOwner() const
 {
-    if (ObjectGuid ownerGuid = GetOwnerGuid())
+    // Owner is actually creator in our case
+    if (ObjectGuid ownerGuid = GetCreatorGuid())
         return ObjectAccessor::GetUnit(*this, ownerGuid);
 
     return nullptr;
@@ -169,7 +174,7 @@ Unit* Totem::GetOwner()
 void Totem::SetTypeBySummonSpell(SpellEntry const* spellProto)
 {
     // Get spell casted by totem
-    SpellEntry const* totemSpell = sSpellStore.LookupEntry(GetSpell());
+    SpellEntry const* totemSpell = sSpellTemplate.LookupEntry<SpellEntry>(GetSpell());
     if (totemSpell)
     {
         // If spell have cast time -> so its active totem
@@ -178,6 +183,66 @@ void Totem::SetTypeBySummonSpell(SpellEntry const* spellProto)
     }
     if (spellProto->SpellIconID == 2056)
         m_type = TOTEM_STATUE;                              // Jewelery statue
+}
+
+float Totem::GetCritChance(WeaponAttackType attackType) const
+{
+    // Totems use owner's crit chance (when owner is available)
+    if (const Unit* owner = GetOwner())
+        return owner->GetCritChance(attackType);
+    return Creature::GetCritChance(attackType);
+}
+
+float Totem::GetCritChance(SpellSchoolMask schoolMask) const
+{
+    // Totems use owner's crit chance (when owner is available)
+    if (const Unit* owner = GetOwner())
+        return owner->GetCritChance(schoolMask);
+    return Creature::GetCritChance(schoolMask);
+}
+
+float Totem::GetCritMultiplier(SpellSchoolMask dmgSchoolMask, uint32 creatureTypeMask, const SpellEntry *spell, bool heal) const
+{
+    // Totems use owner's crit multiplier
+    if (const Unit* owner = GetOwner())
+        return owner->GetCritMultiplier(dmgSchoolMask, creatureTypeMask, spell, heal);
+    return Creature::GetCritMultiplier(dmgSchoolMask, creatureTypeMask, spell, heal);
+}
+
+float Totem::GetHitChance(WeaponAttackType attackType) const
+{
+    // Totems use owner's hit chance (when owner is available)
+    if (const Unit* owner = GetOwner())
+        return owner->GetHitChance(attackType);
+    return Creature::GetHitChance(attackType);
+}
+
+float Totem::GetHitChance(SpellSchoolMask schoolMask) const
+{
+    // Totems use owner's hit chance (when owner is available)
+    if (const Unit* owner = GetOwner())
+        return owner->GetHitChance(schoolMask);
+    return Creature::GetHitChance(schoolMask);
+}
+
+float Totem::GetMissChance(WeaponAttackType /*attackType*/) const
+{
+    // Totems have no inherit miss chance
+    return 0.0f;
+}
+
+float Totem::GetMissChance(SpellSchoolMask /*schoolMask*/) const
+{
+    // Totems have no inherit miss chance
+    return 0.0f;
+}
+
+int32 Totem::GetResistancePenetration(SpellSchools school) const
+{
+    // Totems use owner's penetration (when owner is available)
+    if (const Unit* owner = GetOwner())
+        return owner->GetResistancePenetration(school);
+    return Creature::GetResistancePenetration(school);
 }
 
 bool Totem::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const

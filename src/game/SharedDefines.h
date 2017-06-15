@@ -108,6 +108,8 @@ static const uint8 classToIndex[MAX_CLASSES] = { 0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0
 
 #define CLASSMASK_WAND_USERS ((1<<(CLASS_PRIEST-1))|(1<<(CLASS_MAGE-1))|(1<<(CLASS_WARLOCK-1)))
 
+#define CLASSMASK_RELIC_USERS ((1<<(CLASS_PALADIN-1))|(1<<(CLASS_SHAMAN-1))|(1<<(CLASS_DRUID-1))|(1<<(CLASS_DEATH_KNIGHT-1)))
+
 #define PLAYER_MAX_BATTLEGROUND_QUEUES 2
 
 enum ReputationRank
@@ -311,7 +313,7 @@ enum SpellAttributesEx
     SPELL_ATTR_EX_UNK24                        = 0x01000000,// 24 Req fishing pole??
     SPELL_ATTR_EX_UNK25                        = 0x02000000,// 25
     SPELL_ATTR_EX_UNK26                        = 0x04000000,// 26
-    SPELL_ATTR_EX_REFUND_POWER                 = 0x08000000,// 27 All these spells refund power on miss, dodge, parry (? Guesswork)
+    SPELL_ATTR_EX_REFUND_POWER                 = 0x08000000,// 27 All these spells refund power on parry or deflect
     SPELL_ATTR_EX_DONT_DISPLAY_IN_AURA_BAR     = 0x10000000,// 28
     SPELL_ATTR_EX_CHANNEL_DISPLAY_SPELL_NAME   = 0x20000000,// 29
     SPELL_ATTR_EX_ENABLE_AT_DODGE              = 0x40000000,// 30 overpower
@@ -359,7 +361,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK0                        = 0x00000001,// 0
     SPELL_ATTR_EX3_UNK1                        = 0x00000002,// 1
     SPELL_ATTR_EX3_UNK2                        = 0x00000004,// 2
-    SPELL_ATTR_EX3_UNK3                        = 0x00000008,// 3
+    SPELL_ATTR_EX3_BLOCKABLE_SPELL             = 0x00000008,// 3 TODO: Investigate more
     SPELL_ATTR_EX3_IGNORE_RESURRECTION_TIMER   = 0x00000010,// 4 Druid Rebirth only this spell have this flag
     SPELL_ATTR_EX3_UNK5                        = 0x00000020,// 5
     SPELL_ATTR_EX3_UNK6                        = 0x00000040,// 6
@@ -382,7 +384,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK23                       = 0x00800000,// 23
     SPELL_ATTR_EX3_REQ_OFFHAND                 = 0x01000000,// 24 Req offhand weapon
     SPELL_ATTR_EX3_UNK25                       = 0x02000000,// 25 no cause spell pushback ?
-    SPELL_ATTR_EX3_UNK26                       = 0x04000000,// 26
+    SPELL_ATTR_EX3_CAN_PROC_WITH_TRIGGERED     = 0x04000000,// 26 auras with this attribute can proc from triggered spell casts
     SPELL_ATTR_EX3_DRAIN_SOUL                  = 0x08000000,// 27
     SPELL_ATTR_EX3_UNK28                       = 0x10000000,// 28 always cast ok ? (requires more research)
     SPELL_ATTR_EX3_UNK29                       = 0x20000000,// 29 can only target ground targets (non fly non jump)
@@ -459,7 +461,7 @@ enum SpellAttributesEx5
     SPELL_ATTR_EX5_DONT_SHOW_AURA_IF_NOT_SELF_CAST = 0x10000000,// 28 Auras with this attribute are not visible on units that are not the caster
     SPELL_ATTR_EX5_UNK29                       = 0x20000000,// 29
     SPELL_ATTR_EX5_UNK30                       = 0x40000000,// 30
-    SPELL_ATTR_EX5_UNK31                       = 0x80000000,// 31 Forces all nearby enemies to focus attacks caster
+    SPELL_ATTR_EX5_USE_PHYSICAL_HIT_CHANCE     = 0x80000000,// 31 Introduced in patch 2.3: Taunt, Growl, etc spells use ability miss calculation (see implementation for details)
 };
 
 enum SpellAttributesEx6
@@ -980,7 +982,8 @@ enum SpellCastResult
     SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED = 186,
     SPELL_FAILED_UNKNOWN = 187,                             // actually doesn't exist in client
 
-    SPELL_CAST_OK = 255                                     // custom value, don't must be send to client
+    SPELL_NOT_FOUND = 254,                                  // custom value, don't must be send to client
+    SPELL_CAST_OK = 255
 };
 
 // Used in addition to SPELL_FAILED_CUSTOM_ERROR
@@ -1284,6 +1287,7 @@ enum Targets
     TARGET_AREAEFFECT_GO_AROUND_DEST   = 52,                // gameobject around destination, select by spell_script_target
     TARGET_CURRENT_ENEMY_COORDINATES   = 53,                // set unit coordinates as dest, only 16 target B imlemented
     TARGET_LARGE_FRONTAL_CONE          = 54,
+    TARGET_DEST_CASTER_FRONT_LEAP      = 55,                // for a leap spell
     TARGET_ALL_RAID_AROUND_CASTER      = 56,
     TARGET_SINGLE_FRIEND_2             = 57,
     TARGET_58                          = 58,
@@ -1301,7 +1305,7 @@ enum Targets
     TARGET_RANDOM_NEARBY_LOC           = 72,                // used in teleport onto nearby locations
     TARGET_RANDOM_CIRCUMFERENCE_POINT  = 73,
     TARGET_74                          = 74,
-    TARGET_75                          = 75,
+    TARGET_RANDOM_CIRCUMFERENCE_AROUND_TARGET = 75,         // TODO: Possibly reimplement
     TARGET_DYNAMIC_OBJECT_COORDINATES  = 76,
     TARGET_SINGLE_ENEMY                = 77,
     TARGET_POINT_AT_NORTH              = 78,                // 78-85 possible _COORDINATES at radius with pi/4 step around target in unknown order, N?

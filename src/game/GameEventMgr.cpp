@@ -27,6 +27,7 @@
 #include "MapManager.h"
 #include "BattleGround/BattleGroundMgr.h"
 #include "MassMailMgr.h"
+#include "SQLStorages.h"
 #include "Policies/Singleton.h"
 
 INSTANTIATE_SINGLETON_1(GameEventMgr);
@@ -179,7 +180,7 @@ void GameEventMgr::LoadFromDB()
 
         for (uint16 itr = 1; itr < mGameEvent.size(); ++itr)
         {
-            if (mGameEvent[itr].isValid() && mGameEvent[itr].linkedTo != 0 && (mGameEvent[itr].linkedTo >= mGameEvent.size() || mGameEvent[itr].linkedTo < 0 || !mGameEvent[mGameEvent[itr].linkedTo].isValid()))
+            if (mGameEvent[itr].isValid() && mGameEvent[itr].linkedTo != 0 && (mGameEvent[itr].linkedTo >= mGameEvent.size() || !mGameEvent[mGameEvent[itr].linkedTo].isValid()))
             {
                 sLog.outErrorDb("`game_event` game event id (%i) is Linked to invalid event %u", itr, mGameEvent[itr].linkedTo);
                 mGameEvent[itr].linkedTo = 0;
@@ -421,13 +422,13 @@ void GameEventMgr::LoadFromDB()
                 newData.entry_id = 0;
             }
 
-            if (newData.spell_id_start && !sSpellStore.LookupEntry(newData.spell_id_start))
+            if (newData.spell_id_start && !sSpellTemplate.LookupEntry<SpellEntry>(newData.spell_id_start))
             {
                 sLog.outErrorDb("Table `game_event_creature_data` have creature (Guid: %u) with nonexistent spell_start %u, set to no start spell.", guid, newData.spell_id_start);
                 newData.spell_id_start = 0;
             }
 
-            if (newData.spell_id_end && !sSpellStore.LookupEntry(newData.spell_id_end))
+            if (newData.spell_id_end && !sSpellTemplate.LookupEntry<SpellEntry>(newData.spell_id_end))
             {
                 sLog.outErrorDb("Table `game_event_creature_data` have creature (Guid: %u) with nonexistent spell_end %u, set to no end spell.", guid, newData.spell_id_end);
                 newData.spell_id_end = 0;
@@ -964,8 +965,8 @@ void GameEventMgr::UpdateWorldStates(uint16 event_id, bool Activate)
             if (bl && bl->HolidayWorldStateId)
             {
                 WorldPacket data;
-                sBattleGroundMgr.BuildUpdateWorldStatePacket(&data, bl->HolidayWorldStateId, Activate ? 1 : 0);
-                sWorld.SendGlobalMessage(&data);
+                sBattleGroundMgr.BuildUpdateWorldStatePacket(data, bl->HolidayWorldStateId, Activate ? 1 : 0);
+                sWorld.SendGlobalMessage(data);
             }
         }
     }
@@ -1046,7 +1047,7 @@ bool GameEventMgr::IsActiveHoliday(HolidayIds id)
     return false;
 }
 
-MANGOS_DLL_SPEC bool IsHolidayActive(HolidayIds id)
+bool IsHolidayActive(HolidayIds id)
 {
     return sGameEventMgr.IsActiveHoliday(id);
 }

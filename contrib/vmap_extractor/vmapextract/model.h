@@ -57,20 +57,17 @@ class Model
             indices = NULL;
         }
         std::string filename;
-        char outfilename;
 };
 
 class ModelInstance
 {
     public:
-        Model* model;
-
         uint32 id;
-        uint16 scale;
         Vec3D pos, rot;
+        uint16 scale;
         float sc;
 
-        ModelInstance() {}
+        ModelInstance() : id(0), scale(0), sc(0.0f) {}
         ModelInstance(MPQFile& f, const char* ModelInstName, uint32 mapID, uint32 tileX, uint32 tileY, FILE* pDirfile);
 };
 

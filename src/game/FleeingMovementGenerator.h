@@ -23,14 +23,14 @@
 #include "ObjectGuid.h"
 
 template<class T>
-class MANGOS_DLL_SPEC FleeingMovementGenerator
+class FleeingMovementGenerator
     : public MovementGeneratorMedium< T, FleeingMovementGenerator<T> >
 {
     public:
         FleeingMovementGenerator(ObjectGuid fright) : i_frightGuid(fright), i_nextCheckTime(0) {}
 
         void Initialize(T&);
-        void Finalize(T&);
+        void Finalize(T&) const;
         void Interrupt(T&);
         void Reset(T&);
         bool Update(T&, const uint32&);
@@ -45,7 +45,7 @@ class MANGOS_DLL_SPEC FleeingMovementGenerator
         TimeTracker i_nextCheckTime;
 };
 
-class MANGOS_DLL_SPEC TimedFleeingMovementGenerator
+class TimedFleeingMovementGenerator
     : public FleeingMovementGenerator<Creature>
 {
     public:

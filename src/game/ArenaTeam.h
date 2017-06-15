@@ -178,7 +178,7 @@ class ArenaTeam
 
         void SaveToDB();
 
-        void BroadcastPacket(WorldPacket* packet);
+        void BroadcastPacket(WorldPacket const& packet);
 
         void BroadcastEvent(ArenaTeamEvents event, ObjectGuid guid, char const* str1 = nullptr, char const* str2 = nullptr, char const* str3 = nullptr);
         void BroadcastEvent(ArenaTeamEvents event, char const* str1 = nullptr, char const* str2 = nullptr, char const* str3 = nullptr)
@@ -187,12 +187,12 @@ class ArenaTeam
         }
 
         void Roster(WorldSession* session);
-        void Query(WorldSession* session);
-        void Stats(WorldSession* session);
+        void Query(WorldSession* session) const;
+        void Stats(WorldSession* session) const;
         void InspectStats(WorldSession* session, ObjectGuid guid);
 
         uint32 GetPoints(uint32 MemberRating);
-        float GetChanceAgainst(uint32 own_rating, uint32 enemy_rating);
+        float GetChanceAgainst(uint32 own_rating, uint32 enemy_rating) const;
         int32 WonAgainst(uint32 againstRating);
         void MemberWon(Player* plr, uint32 againstRating);
         int32 LostAgainst(uint32 againstRating);

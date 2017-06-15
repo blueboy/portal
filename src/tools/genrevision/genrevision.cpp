@@ -21,6 +21,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
+#include <iostream>
 
 #pragma warning(disable:4996)
 
@@ -70,7 +71,8 @@ bool extractDataFromGit(std::string filename, std::string path, bool url, RawDat
 {
     char buf[1024];
 
-    if (FILE* entriesFile = fopen(filename.c_str(), "r"))
+    FILE* entriesFile = fopen(filename.c_str(), "r");
+    if (entriesFile)
     {
         char hash_str[200];
         char branch_str[200];
@@ -132,8 +134,12 @@ bool extractDataFromGit(std::string filename, std::string path, bool url, RawDat
         else
             strcpy(data.rev_str, hash_str);
     }
-    else if (entriesFile = fopen((path + ".git/HEAD").c_str(), "r"))
+    else
     {
+        entriesFile = fopen((path + ".git/HEAD").c_str(), "r");
+        if (!entriesFile)
+            return false;
+
         if (!fgets(buf, sizeof(buf), entriesFile))
         {
             fclose(entriesFile);
@@ -149,7 +155,7 @@ bool extractDataFromGit(std::string filename, std::string path, bool url, RawDat
 
         fclose(entriesFile);
 
-        if (FILE *refFile = fopen((path + ".git/" + refBuff).c_str(), "r"))
+        if (FILE* refFile = fopen((path + ".git/" + refBuff).c_str(), "r"))
         {
             char hash[41];
 
@@ -160,14 +166,12 @@ bool extractDataFromGit(std::string filename, std::string path, bool url, RawDat
             }
 
             strcpy(data.rev_str, hash);
-            
+
             fclose(refFile);
         }
         else
             return false;
     }
-    else
-        return false;
 
     time_t rev_time = 0;
     // extracting date/time
@@ -336,31 +340,28 @@ int main(int argc, char** argv)
     }
 
     /// get existed header data for compare
-    std::string oldData;
-
-    if (FILE* headerFile = fopen(outfile.c_str(), "rb"))
+    std::stringstream oldData;
+    std::ifstream headerFile(outfile);
+    if (headerFile.is_open())
     {
-        while (!feof(headerFile))
-        {
-            int c = fgetc(headerFile);
-            if (c < 0)
-                break;
-            oldData += (char)c;
-        }
-
-        fclose(headerFile);
+        oldData << headerFile.rdbuf();
+        headerFile.close();
     }
 
     /// update header only if different data
-    if (newData != oldData)
+    if (newData != oldData.str())
     {
-        if (FILE* outputFile = fopen(outfile.c_str(), "w"))
+        std::ofstream outStream(outfile);
+        if (!outStream)
         {
-            fprintf(outputFile, "%s", newData.c_str());
-            fclose(outputFile);
+            std::cerr << "Error writing to " << outfile << std::endl;
+            return 1;
         }
         else
-            return 1;
+        {
+            outStream << newData;
+            outStream.close();
+        }
     }
 
     return 0;

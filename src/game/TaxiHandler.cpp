@@ -37,7 +37,7 @@ void WorldSession::HandleTaxiNodeStatusQueryOpcode(WorldPacket& recv_data)
     SendTaxiStatus(guid);
 }
 
-void WorldSession::SendTaxiStatus(ObjectGuid guid)
+void WorldSession::SendTaxiStatus(ObjectGuid guid) const
 {
     // cheating checks
     Creature* unit = GetPlayer()->GetMap()->GetCreature(guid);
@@ -58,7 +58,7 @@ void WorldSession::SendTaxiStatus(ObjectGuid guid)
     WorldPacket data(SMSG_TAXINODE_STATUS, 9);
     data << ObjectGuid(guid);
     data << uint8(GetPlayer()->m_taxi.IsTaximaskNodeKnown(curloc) ? 1 : 0);
-    SendPacket(&data);
+    SendPacket(data);
 
     DEBUG_LOG("WORLD: Sent SMSG_TAXINODE_STATUS");
 }
@@ -86,7 +86,7 @@ void WorldSession::HandleTaxiQueryAvailableNodes(WorldPacket& recv_data)
     SendTaxiMenu(unit);
 }
 
-void WorldSession::SendTaxiMenu(Creature* unit)
+void WorldSession::SendTaxiMenu(Creature* unit) const
 {
     // find current node
     uint32 curloc = sObjectMgr.GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), GetPlayer()->GetTeam());
@@ -101,12 +101,12 @@ void WorldSession::SendTaxiMenu(Creature* unit)
     data << unit->GetObjectGuid();
     data << uint32(curloc);
     GetPlayer()->m_taxi.AppendTaximaskTo(data, GetPlayer()->isTaxiCheater());
-    SendPacket(&data);
+    SendPacket(data);
 
     DEBUG_LOG("WORLD: Sent SMSG_SHOWTAXINODES");
 }
 
-void WorldSession::SendDoFlight(uint32 mountDisplayId, uint32 path, uint32 pathNode)
+void WorldSession::SendDoFlight(uint32 mountDisplayId, uint32 path, uint32 pathNode) const
 {
     while (GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
         GetPlayer()->GetMotionMaster()->MovementExpired(false);
@@ -117,7 +117,7 @@ void WorldSession::SendDoFlight(uint32 mountDisplayId, uint32 path, uint32 pathN
     GetPlayer()->GetMotionMaster()->MoveTaxiFlight(path, pathNode);
 }
 
-bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
+bool WorldSession::SendLearnNewTaxiNode(Creature* unit) const
 {
     // find current node
     uint32 curloc = sObjectMgr.GetNearestTaxiNode(unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), unit->GetMapId(), GetPlayer()->GetTeam());
@@ -128,12 +128,12 @@ bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
     if (GetPlayer()->m_taxi.SetTaximaskNode(curloc))
     {
         WorldPacket msg(SMSG_NEW_TAXI_PATH, 0);
-        SendPacket(&msg);
+        SendPacket(msg);
 
         WorldPacket update(SMSG_TAXINODE_STATUS, 9);
         update << ObjectGuid(unit->GetObjectGuid());
         update << uint8(1);
-        SendPacket(&update);
+        SendPacket(update);
 
         return true;
     }
@@ -141,11 +141,11 @@ bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
         return false;
 }
 
-void WorldSession::SendActivateTaxiReply(ActivateTaxiReply reply)
+void WorldSession::SendActivateTaxiReply(ActivateTaxiReply reply) const
 {
     WorldPacket data(SMSG_ACTIVATETAXIREPLY, 4);
     data << uint32(reply);
-    SendPacket(&data);
+    SendPacket(data);
 
     DEBUG_LOG("WORLD: Sent SMSG_ACTIVATETAXIREPLY");
 }
@@ -218,7 +218,7 @@ void WorldSession::HandleMoveSplineDoneOpcode(WorldPacket& recv_data)
             if (GetPlayer()->m_taxi.SetTaximaskNode(sourcenode))
             {
                 WorldPacket data(SMSG_NEW_TAXI_PATH, 0);
-                _player->GetSession()->SendPacket(&data);
+                _player->GetSession()->SendPacket(data);
             }
         }
 

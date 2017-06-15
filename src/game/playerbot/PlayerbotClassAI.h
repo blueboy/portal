@@ -34,7 +34,7 @@ struct heal_priority
     bool operator<(const heal_priority& a) const { return type < a.type; }
 };
 
-class MANGOS_DLL_SPEC PlayerbotClassAI
+class PlayerbotClassAI
 {
 public:
     PlayerbotClassAI(Player * const master, Player * const bot, PlayerbotAI * const ai);

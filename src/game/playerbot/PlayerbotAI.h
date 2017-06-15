@@ -1496,7 +1496,7 @@ enum m_FollowAutoGo
     FOLLOWAUTOGO_RUN        = 4
 };
 
-class MANGOS_DLL_SPEC PlayerbotAI
+class PlayerbotAI
 {
 public:
     enum ScenarioType

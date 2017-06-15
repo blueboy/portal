@@ -157,6 +157,7 @@ UPDATE item_template SET ScriptName='item_arcane_charges' WHERE entry=34475;
 UPDATE item_template SET ScriptName='item_flying_machine' WHERE entry IN (34060,34061);
 UPDATE item_template SET ScriptName='item_gor_dreks_ointment' WHERE entry=30175;
 UPDATE item_template SET ScriptName='item_petrov_cluster_bombs' WHERE entry=33098;
+UPDATE item_template SET ScriptName='item_orb_of_draconic_energy' WHERE entry=12300;
 
 /* NPC (usually creatures to be found in more than one specific zone) */
 UPDATE creature_template SET ScriptName='npc_air_force_bots' WHERE entry IN (2614, 2615, 21974, 21993, 21996, 21997, 21999, 22001, 22002, 22003, 22063, 22065, 22066, 22068, 22069, 22070, 22071, 22078, 22079, 22080, 22086, 22087, 22088, 22090, 22124, 22125, 22126);
@@ -276,6 +277,7 @@ UPDATE creature_template SET ScriptName='npc_depth_charge' WHERE entry=23025;
 UPDATE gameobject_template SET ScriptName='go_southfury_moonstone' WHERE entry=185566;
 UPDATE creature_template SET ScriptName='mobs_spitelashes' WHERE entry IN (6190,6193,6194,6195,6196);
 UPDATE creature_template SET ScriptName='npc_loramus_thalipedes' WHERE entry=7783;
+UPDATE creature_template SET ScriptName='npc_felhound_tracker' WHERE entry=8668;
 
 /* AZUREMYST ISLE */
 UPDATE creature_template SET ScriptName='npc_draenei_survivor' WHERE entry=16483;
@@ -290,6 +292,7 @@ UPDATE creature_template SET ScriptName='npc_twiggy_flathead' WHERE entry=6248;
 DELETE FROM scripted_areatrigger WHERE entry=522;
 INSERT INTO scripted_areatrigger VALUES (522,'at_twiggy_flathead');
 UPDATE creature_template SET ScriptName='npc_wizzlecranks_shredder' WHERE entry=3439;
+UPDATE creature_template SET ScriptName='npc_gallywix' WHERE entry=7288;
 
 /* BLACK TEMPLE */
 UPDATE instance_template SET ScriptName='instance_black_temple' WHERE map=564;
@@ -388,6 +391,9 @@ UPDATE creature_template SET ScriptName='npc_bloodmaul_stout_trigger' WHERE entr
 UPDATE creature_template SET ScriptName='npc_simon_game_bunny' WHERE entry=22923;
 UPDATE creature_template SET ScriptName='npc_light_orb_collector' WHERE entry IN (21926,22333);
 UPDATE creature_template SET ScriptName='npc_bloodmaul_dire_wolf' WHERE entry=20058;
+UPDATE creature_template SET ScriptName='npc_vimgol_visual_bunny' WHERE entry=23040;
+UPDATE creature_template SET ScriptName='npc_vimgol_middle_bunny' WHERE entry=23081;
+UPDATE creature_template SET ScriptName='npc_vimgol' WHERE entry=22911;
 
 /* BLASTED LANDS */
 UPDATE creature_template SET ScriptName='npc_fallen_hero_of_horde' WHERE entry=7572;
@@ -408,6 +414,7 @@ UPDATE creature_template SET ScriptName='npc_scourged_flamespitter' WHERE entry=
 UPDATE creature_template SET ScriptName='npc_bonker_togglevolt' WHERE entry=25589;
 UPDATE creature_template SET ScriptName='npc_jenny' WHERE entry=25969;
 UPDATE creature_template SET ScriptName='npc_seaforium_depth_charge' WHERE entry=25401;
+UPDATE creature_template SET ScriptName='npc_mootoo_the_younger' WHERE entry=25504;
 
 /* BURNING STEPPES */
 UPDATE creature_template SET ScriptName='npc_ragged_john' WHERE entry=9563;
@@ -575,9 +582,14 @@ UPDATE creature_template SET ScriptName='npc_dalinda_malem' WHERE entry=5644;
 UPDATE creature_template SET ScriptName='npc_melizza_brimbuzzle' WHERE entry=12277;
 UPDATE creature_template SET ScriptName='npc_cork_gizelton' WHERE entry=11625;
 UPDATE creature_template SET ScriptName='npc_rigger_gizelton' WHERE entry=11626;
+UPDATE creature_template SET ScriptName='npc_magrami_spectre' WHERE entry=11560;
 
 /* DIRE MAUL */
 UPDATE instance_template SET ScriptName='instance_dire_maul' WHERE map=429;
+DELETE FROM scripted_event_id WHERE id IN (8420,8428);
+INSERT INTO scripted_event_id VALUES
+(8420,'event_spells_warlock_dreadsteed'),
+(8428,'event_spells_warlock_dreadsteed');
 
 /* DRAGONBLIGHT */
 UPDATE creature_template SET ScriptName='npc_destructive_ward' WHERE entry=27430;
@@ -623,7 +635,6 @@ UPDATE creature_template SET ScriptName='npc_scarlet_ghoul' WHERE entry=28845;
 UPDATE creature_template SET ScriptName='npc_highlord_darion_mograine' WHERE entry=29173;
 UPDATE creature_template SET ScriptName='npc_fellow_death_knight' WHERE entry IN (29199, 29204, 29200);
 UPDATE creature_template SET ScriptName='npc_lich_king_light_dawn' WHERE entry=29183;
-UPDATE creature_template SET ScriptName='npc_acherus_deathcharger' WHERE entry=28782;
 UPDATE creature_template SET ScriptName='npc_scarlet_courier' WHERE entry=29076;
 
 /* ELWYNN FOREST */
@@ -750,7 +761,6 @@ INSERT INTO scripted_areatrigger VALUES
 (4778,'at_ancient_male_vrykul'),
 (4779,'at_nifflevar');
 UPDATE creature_template SET ScriptName='npc_ancient_male_vrykul' WHERE entry=24314;
-UPDATE creature_template SET ScriptName='npc_daegarn' WHERE entry=24151;
 UPDATE creature_template SET ScriptName='npc_silvermoon_harry' WHERE entry=24539;
 UPDATE creature_template SET ScriptName='npc_lich_king_village' WHERE entry=24248;
 UPDATE creature_template SET ScriptName='npc_king_ymiron' WHERE entry=24321;
@@ -886,7 +896,6 @@ UPDATE creature_template SET ScriptName='npc_fiendish_portal' WHERE entry=17265;
 UPDATE creature_template SET ScriptName='npc_shade_of_aran_blizzard' WHERE entry=17161;
 UPDATE creature_template SET ScriptName='npc_netherspite_portal' WHERE entry IN (17367,17368,17369);
 UPDATE creature_template SET ScriptName='npc_infernal_target' WHERE entry=17644;
-UPDATE creature_template SET ScriptName='npc_berthold' WHERE entry=16153;
 UPDATE creature_template SET ScriptName='npc_barnes' WHERE entry=16812;
 UPDATE creature_template SET ScriptName='npc_grandmother' WHERE entry=17603;
 UPDATE creature_template SET ScriptName='npc_image_of_medivh' WHERE entry=17651;
@@ -1360,6 +1369,8 @@ UPDATE creature_template SET ScriptName='npc_isla_starmane' WHERE entry=18760;
 UPDATE creature_template SET ScriptName="npc_skywing" WHERE entry=22424;
 UPDATE creature_template SET ScriptName="npc_cenarion_sparrowhawk" WHERE entry=22972;
 UPDATE creature_template SET ScriptName="npc_skyguard_prisoner" WHERE entry=23383;
+UPDATE creature_template SET ScriptName='npc_avatar_of_terokk' WHERE entry=22375;
+UPDATE creature_template SET ScriptName='npc_minion_of_terokk' WHERE entry=22376;
 
 /* THOUSAND NEEDLES */
 UPDATE creature_template SET ScriptName='npc_kanati' WHERE entry=10638;
@@ -1719,7 +1730,7 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 (-1000136,'Yes, my lord.',0,0,0,0,'dawnforge COMMANDER_DAWNFORGE_4 SAY_ARCANIST_ARDONIS_2'),
 (-1000137,'See to it, Ardonis!',0,0,0,0,'dawnforge COMMANDER_DAWNFORGE_5'),
 
-(-1000138,'Avruu\'s magic... it still controls me. You must fight me, mortal. It\'s the only way to break the spell!',0,0,0,0,'aeranas SAY_SUMMON'),
+(-1000138,'REUSE ME',0,0,0,0,'REUSE_ME'),
 (-1000139,'Avruu\'s magic is broken! I\'m free once again!',0,0,0,0,'aeranas SAY_FREE'),
 
 (-1000140,'Let\'s go.',0,0,1,0,'lilatha SAY_START'),
@@ -1767,14 +1778,14 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 
 (-1000175,'Thank you, mortal.',0,0,11,0,' SAY_JUST_EATEN'),
 
-(-1000176,'The last thing I remember is the ship falling and us getting into the pods. I\'ll go see how I can help. Thank you!',0,0,7,0,'draenei_survivor SAY_HEAL1'),
-(-1000177,'$C, Where am I? Who are you? Oh no! What happened to the ship?',0,0,7,0,'draenei_survivor SAY_HEAL2'),
-(-1000178,'$C You saved me! I owe you a debt that I can never repay. I\'ll go see if I can help the others.',0,0,7,0,'draenei_survivor SAY_HEAL3'),
-(-1000179,'Ugh... what is this place? Is that all that\'s left of the ship over there?',0,0,7,0,'draenei_survivor SAY_HEAL4'),
-(-1000180,'Oh, the pain...',0,0,7,0,'draenei_survivor SAY_HELP1'),
-(-1000181,'Everything hurts, Please make it stop...',0,0,7,0,'draenei_survivor SAY_HELP2'),
-(-1000182,'Ughhh... I hurt. Can you help me?',0,0,7,0,'draenei_survivor SAY_HELP3'),
-(-1000183,'I don\'t know if I can make it, please help me...',0,0,7,0,'draenei_survivor SAY_HELP4'),
+(-1000176,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000177,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000178,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000179,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000180,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000181,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000182,'REUSE ME',0,0,0,0,'REUSE_ME'),
+(-1000183,'REUSE ME',0,0,0,0,'REUSE_ME'),
 
 (-1000184,'Daughter!',0,0,7,5,'cowlen SAY_DAUGHTER'),
 
@@ -2488,8 +2499,8 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 (-1000793,'We shall earn our deaths at the very least!',0,0,0,0,'volcor SAY_AGGRO_2'),
 (-1000794,'Don\'t give up! Fight, to the death!',0,0,0,0,'volcor SAY_AGGRO_3'),
 
-(-1000795,'OK boss, I get back to tree hitting.',0,0,0,0,'lazy peon SAY_AWAKE_1'),
-(-1000796,'Sleepy... so sleepy...',0,0,0,0,'lazy peon SAY_AWAKE_2'),
+(-1000795,'Ow! Ok, I\'ll get back to work, $N!',0,0,1,0,'Lazy Peon SAY_PEON_AWOKEN'),
+(-1000796,'REUSE_ME',0,0,0,0,'REUSE_ME'),
 
 (-1000797,'%s squawks and heads toward Veil Shalas. Hurry and follow!',0,2,0,0,'skywing SAY_SKYWING_START'),
 (-1000798,'%s pauses briefly before the tree and then heads inside.',0,2,0,0,'skywing SAY_SKYWING_TREE_DOWN'),
@@ -2954,7 +2965,36 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 (-1001213,'Get back to Blood Watch. I\'ll see you there...',0,0,0,1,'demolitionist_legoso SAY_ESCORT_COMPLETE_2'),
 
 (-1001214,'%s becomes unstable with brimming energy.',0,2,0,0,'living_flare EMOTE_UNSTABLE'),
-(-1001215,'%s releases its energy, engulfing its surroundings in flames!',0,2,0,0,'living_flare EMOTE_BURST');
+(-1001215,'%s releases its energy, engulfing its surroundings in flames!',0,2,0,0,'living_flare EMOTE_BURST'),
+
+(-1001216,'The last thing I remember is the ship falling and us getting into the pods. I\'ll go see how I can help. Thank you!',0,0,7,0,'draenei_survivor SAY_HEAL1'),
+(-1001217,'Where am I? Who are you? Oh no! What happened to the ship?',0,0,7,0,'draenei_survivor SAY_HEAL2'),
+(-1001218,'$C You saved me! I owe you a debt that I can never repay. I\'ll go see if I can help the others.',0,0,7,0,'draenei_survivor SAY_HEAL3'),
+(-1001219,'Ugh... what is this place? Is that all that\'s left of the ship over there?',0,0,7,0,'draenei_survivor SAY_HEAL4'),
+(-1001220,'Many thanks to you, $c. I''d best get to the crash site and see how I can help out. Until we meet again.',0,0,7,0,'draenei_survivor SAY_HEAL5'),
+(-1001221,'Huh? What happened? Oh... my head feels like it''s going to explode! I''d best get back to the crash site.',0,0,7,0,'draenei_survivor SAY_HEAL6'),
+(-1001222,'Oh, the pain...',0,0,7,0,'draenei_survivor SAY_HELP1'),
+(-1001223,'Everything hurts. Please, make it stop...',0,0,7,0,'draenei_survivor SAY_HELP2'),
+(-1001224,'Ughhh... I hurt. Can you help me?',0,0,7,0,'draenei_survivor SAY_HELP3'),
+(-1001225,'I don''t know if I can make it. Please help me...',0,0,7,0,'draenei_survivor SAY_HELP4'),
+
+(-1001226,'Thank you for doing this, $r. I... I think I know how to get back to my father. Please don\'t let the bad things hurt me.',0,0,0,1,'SAY_MOOTOO_Y_START'),
+(-1001227,'I thought for sure that I would die like all the others!',0,0,0,1,'SAY_1_MOOTOO_Y'),
+(-1001228,'I can feel my father\'s aura. He\'s definitely this way... come on, $n.',0,0,0,1,'SAY_2_MOOTOO_Y'),
+(-1001229,'The mist is death... senseless, without compassion.',0,0,0,1,'SAY_3_MOOTOO_Y'),
+(-1001230,'So cold...',0,0,0,1,'SAY_4_MOOTOO_Y'),
+(-1001231,'What was that! Did you see that?',0,0,0,0,'SAY_5_MOOTOO_Y'),
+(-1001232,'Everyone is dead... Everyone and everything...',0,0,0,1,'SAY_6_MOOTOO_Y'),
+(-1001233,'I see a break in the mist up ahead. We\'re getting closer!',0,0,0,5,'SAY_7_MOOTOO_Y'),
+(-1001234,'How will we overcome the mist?',0,0,0,1,'SAY_8_MOOTOO_Y'),
+(-1001235,'FATHER! Father, I\'m saved!',0,0,0,1,'SAY_CREDIT_MOOTOO_Y'),
+(-1001236,'Daughter! You have returned!',0,0,0,5,'SAY_1_ELDER_MOOTOO'),
+(-1001237,'%s hugs Elder Mootoo.',0,2,0,5,'SAY_9_MOOTOO_Y'),
+(-1001238,'Mootoo thanks you, $n.',0,0,0,1,'SAY_2_ELDER_MOOTOO'),
+
+(-1001239,'%s is drawn to the ghost magnet...',0,2,0,0,'Magrami Spectre on spawn 1'),
+(-1001240,'%s is angered!',0,2,0,0,'Magrami Spectre on spawn 2'),
+(-1001241,'The Avatar of Terokk has been defeated! Death to Terokk! Death to Skettis!',0,0,7,0,'Defender Grashna on Avatar of Terokk death');
 
 -- -1 033 000 SHADOWFANG KEEP
 INSERT INTO script_texts (entry,content_default,sound,type,language,emote,comment) VALUES
@@ -3415,8 +3455,8 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 
 (-1409003,'Reckless mortals! None may challenge the Sons of the Living flame!',8035,1,0,0,'majordomo SAY_AGGRO'),
 (-1409004,'The runes of warding have been destroyed! Hunt down the infidels, my brethren!',8039,6,0,0,'majordomo SAY_SPAWN'),
-(-1409005,'Ashes to Ashes!',8037,1,0,0,'majordomo SAY_SLAY'),
-(-1409006,'Burn mortals! Burn for this transgression!',8036,1,0,0,'majordomo SAY_SPECIAL'),
+(-1409005,'Ashes to Ashes!',8037,1,0,0,'majordomo SAY_SLAY_1'),
+(-1409006,'Burn mortals! Burn for this transgression!',8036,1,0,0,'majordomo SAY_SLAY_2'),
 (-1409007,'Impossible! Stay your attack, mortals... I submit! I submit!',8038,1,0,0,'majordomo SAY_DEFEAT_1'),
 
 (-1409008,'Behold Ragnaros - the Firelord! He who was ancient when this world was young! Bow before him, mortals! Bow before your ending!',8040,1,0,0,'ragnaros SAY_SUMMON_MAJ'),
@@ -3430,14 +3470,15 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 (-1409015,'BY FIRE BE PURGED!',8046,1,0,0,'ragnaros SAY_HAND'),
 (-1409016,'TASTE THE FLAMES OF SULFURON!',8047,1,0,0,'ragnaros SAY_WRATH'),
 (-1409017,'DIE INSECT!',8051,1,0,0,'ragnaros SAY_KILL'),
-(-1409018,'MY PATIENCE IS DWINDILING! COME NATS TO YOUR DEATH!',8048,1,0,0,'ragnaros SAY_MAGMABURST'),
+(-1409018,'MY PATIENCE IS DWINDLING! COME GNATS: TO YOUR DEATH!',8048,1,0,0,'ragnaros SAY_MAGMABURST'),
 
 (-1409019,'You think you\'ve won already? Perhaps you\'ll need another lesson in pain!',0,1,0,0,'majordomo SAY_LAST_ADD'),
 (-1409020,'Brashly, you have come to wrest the secrets of the Living Flame! You will soon regret the recklessness of your quest.',0,1,0,0,'majordomo SAY_DEFEAT_2'),
 (-1409021,'I go now to summon the lord whose house this is. Should you seek an audience with him, your paltry lives will surely be forfeit! Nevertheless, seek out his lair, if you dare!',0,1,0,0,'majordomo SAY_DEFEAT_3'),
 (-1409022,'My flame! Please don\'t take away my flame... ',8042,1,0,0,'ragnaros SAY_ARRIVAL4_MAJ'),
 (-1409023,'Very well, $n.',0,0,0,0,'majordomo SAY_SUMMON_0'),
-(-1409024,'Impudent whelps! You\'ve rushed headlong to your own deaths! See now, the master stirs!',0,1,0,0,'majordomo SAY_SUMMON_1');
+(-1409024,'Impudent whelps! You\'ve rushed headlong to your own deaths! See now, the master stirs!',0,1,0,0,'majordomo SAY_SUMMON_1'),
+(-1409025,'%s forces one of his Firesworn minions to erupt!',0,2,0,0,'Garr EMOTE_MASSIVE_ERUPTION');
 
 -- -1 429 000 DIRE MAUL
 INSERT INTO script_texts (entry,content_default,sound,type,language,emote,comment) VALUES
@@ -5904,8 +5945,8 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,commen
 (-1609095,'$gPoppy:Mama;!',0,0,0,434,'scarlet ghoul SAY_GHUL_SPAWN_5'),
 (-1609096,'It puts the ghoul in the pit or else it gets the lash!',0,0,0,25,'gothik the harvester SAY_GOTHIK_THROW_IN_PIT'),
 
-(-1609097,'%s rears up, beckoning you to ride it.',0,2,0,0,'Acherus Deathcharger EMOTE_HORSE_READY'),
-(-1609098,'Impressive, death knight. Return to me in the world of the living for your reward.',0,0,0,2,'Salanar the Horseman SAY_RACE_FINISHED'),
+(-1609097,'REUSE ME',0,0,0,0,'REUSE ME'),
+(-1609098,'REUSE ME',0,0,0,0,'REUSE ME'),
 
 (-1609201,'Soldiers of the Scourge, stand ready! Prepare to unleash your fury upon the Argent Dawn!',14677,1,0,0,'Highlord Darion Mograine'),
 (-1609202,'The sky weeps at the devastation of these lands! Soon, Azeroth\'s futile tears will rain down upon us!',14678,1,0,0,'Highlord Darion Mograine'),
@@ -9775,8 +9816,8 @@ INSERT INTO script_waypoint VALUES
 (20281, 4, 3087.792, 2754.602, 115.441, 0, ''),
 (20281, 5, 3080.718, 2730.793, 115.930, 9000, 'SAY_DRIJYA_2'),
 (20281, 6, 3060.235, 2731.306, 115.122, 0, ''),
-(20281, 7, 3050.863, 2727.388, 114.054, 0, ''),
-(20281, 8, 3050.863, 2727.388, 114.054, 8000, 'SAY_DRIJYA_4'),
+(20281, 7, 3050.9  , 2727.823, 114.1269, 0, ''),
+(20281, 8, 3050.9  , 2727.823, 114.1269, 8000, 'SAY_DRIJYA_4'),
 (20281, 9, 3055.008, 2724.972, 113.687, 0, ''),
 (20281, 10, 3053.777, 2718.427, 113.684, 0, ''),
 (20281, 11, 3028.622, 2693.375, 114.670, 0, ''),
@@ -10698,5 +10739,33 @@ INSERT INTO script_waypoint VALUES
 (17982, 37, -1915.010, -10581.500, 178.105, 1000, 'escort paused, SAY_ESCORT_LEGOSO_9, SAY_ESCORT_LEGOSO_10'),
 (17982, 38, -1952.080, -10560.300, 177.657, 4000, 'SAY_ESCORT_COUNT_3, SAY_ESCORT_COUNT_2, SAY_ESCORT_COUNT_1'),
 (17982, 39, -1952.080, -10560.300, 177.657, 1000, 'escort paused, SAY_LEGOSO_AGGRO');
+
+DELETE FROM script_waypoint WHERE entry=25504;
+INSERT INTO script_waypoint VALUES
+(25504, 1, 2886.78, 6732.96, 32.9695, 5000, 'SAY_MOOTOO_Y_START'),
+(25504, 2, 2882.26, 6734.51, 32.8864, 0, ''),
+(25504, 3, 2877.37, 6731.59, 32.8721, 0, ''),
+(25504, 4, 2874.18, 6725.85, 30.3087, 0, 'SAY_1_MOOTOO_Y'),
+(25504, 5, 2866.36, 6726.04, 26.7277, 0, ''),
+(25504, 6, 2863.97, 6731.91, 23.8372, 0, ''),
+(25504, 7, 2869.29, 6736.92, 20.5227, 0, ''),
+(25504, 8, 2874.16, 6731.88, 18.5042, 0, ''),
+(25504, 9, 2887.05, 6736.39, 13.997, 5000, 'SAY_2_MOOTOO_Y'),
+(25504, 10, 2887.05, 6736.39, 13.997, 2000, 'EMOTE_ONESHOT_POINT'),
+(25504, 11, 2901.68, 6741.25, 14.0413, 0, ''),
+(25504, 12, 2919.45, 6746.28, 13.7325, 0, 'SAY_3_MOOTOO_Y'),
+(25504, 13, 2947.18, 6738.71, 12.7117, 0, ''),
+(25504, 14, 2982.43, 6748.59, 10.2755, 0, 'SAY_4_MOOTOO_Y'),
+(25504, 15, 2985.05, 6776.05, 8.33081, 0, 'SAY_5_MOOTOO_Y'),
+(25504, 16, 2978.72, 6801.48, 5.83056, 0, 'SAY_6_MOOTOO_Y'),
+(25504, 17, 2957.81, 6818.86, 4.7594, 0, ''),
+(25504, 18, 2917.03, 6820.55, 5.87954, 0, 'SAY_4_MOOTOO_Y'),
+(25504, 19, 2890.04, 6825.68, 4.11676, 3000, 'SAY_7_MOOTOO_Y'),
+(25504, 20, 2850.31, 6812.35, 2.09411, 0, 'SAY_8_MOOTOO_Y'),
+(25504, 21, 2813.28, 6793.82, 4.44574, 0, ''),
+(25504, 22, 2807.22, 6772.41, 5.80334, 2000, 'SAY_CREDIT_MOOTOO_Y'),
+(25504, 23, 2807.38, 6765,    6.30617, 0, 'SAY_1_ELDER_MOOTOO'),
+(25504, 24, 2807.49, 6748.29, 8.25933, 3000, 'MOOTOO_Y_SAY_9'),
+(25504, 25, 2807.49, 6748.29, 8.25933, 5000, 'SAY_2_ELDER_MOOTOO');
 
 -- EOF

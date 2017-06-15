@@ -17,7 +17,7 @@
  */
 
 #include "IdleMovementGenerator.h"
-#include "AI/CreatureAI.h"
+#include "AI/BaseAI/CreatureAI.h"
 #include "Creature.h"
 
 IdleMovementGenerator si_idleMovement;
@@ -69,7 +69,7 @@ AssistanceDistractMovementGenerator::Finalize(Unit& unit)
         if (unit.isAlive())
         {
             unit.AttackStop(true);
-            ((Creature*)&unit)->AI()->AttackStart(victim);
+            unit.AI()->AttackStart(victim);
         }
     }
 }

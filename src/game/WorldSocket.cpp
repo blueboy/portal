@@ -61,13 +61,13 @@ struct ServerPktHeader
         header[headerIndex++] = 0xFF & (cmd >> 8);
     }
 
-    uint8 getHeaderLength()
+    uint8 getHeaderLength() const
     {
         // cmd = 2 bytes, size= 2||3bytes
         return 2 + (isLargePacket() ? 3 : 2);
     }
 
-    bool isLargePacket()
+    bool isLargePacket() const
     {
         return size > 0x7FFF;
     }
@@ -83,13 +83,8 @@ struct ServerPktHeader
 
 WorldSocket::WorldSocket(boost::asio::io_service &service, std::function<void (Socket *)> closeHandler)
     : Socket(service, closeHandler), m_lastPingTime(std::chrono::system_clock::time_point::min()), m_overSpeedPings(0),
-      m_useExistingHeader(false), m_session(nullptr), m_sessionFinalized(false), m_seed(urand())
+      m_useExistingHeader(false), m_session(nullptr),m_seed(urand())
 {}
-
-WorldSocket::~WorldSocket()
-{
-    delete m_session;
-}
 
 void WorldSocket::SendPacket(const WorldPacket& pct, bool immediate)
 {
@@ -97,7 +92,7 @@ void WorldSocket::SendPacket(const WorldPacket& pct, bool immediate)
         return;
 
     // Dump outgoing packet.
-    sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct.GetOpcode(), pct.GetOpcodeName(), &pct, false);
+    sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct.GetOpcode(), pct.GetOpcodeName(), pct, false);
 
     ServerPktHeader header(pct.size() + 2, pct.GetOpcode());
     m_crypt.EncryptSend((uint8*)header.header, header.getHeaderLength());
@@ -192,7 +187,7 @@ bool WorldSocket::ProcessIncomingData()
     if (IsClosed())
         return false;
 
-    WorldPacket *pct = new WorldPacket(opcode, validBytesRemaining);
+    std::unique_ptr<WorldPacket> pct(new WorldPacket(opcode, validBytesRemaining));
 
     if (validBytesRemaining)
     {
@@ -200,7 +195,7 @@ bool WorldSocket::ProcessIncomingData()
         ReadSkip(validBytesRemaining);
     }
 
-    sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct->GetOpcode(), pct->GetOpcodeName(), pct, true);
+    sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct->GetOpcode(), pct->GetOpcodeName(), *pct, true);
 
     try
     {
@@ -231,7 +226,7 @@ bool WorldSocket::ProcessIncomingData()
                     return false;
                 }
 
-                m_session->QueuePacket(pct);
+                m_session->QueuePacket(std::move(pct));
 
                 return true;
             }
@@ -252,7 +247,6 @@ bool WorldSocket::ProcessIncomingData()
         {
             DETAIL_LOG("Disconnecting session [account id %i / address %s] for badly formatted packet.",
                        m_session ? m_session->GetAccountId() : -1, GetRemoteAddress().c_str());
-
             return false;
         }
     }
@@ -502,7 +496,6 @@ bool WorldSocket::HandlePing(WorldPacket &recvPacket)
                     sLog.outError("WorldSocket::HandlePing: Player kicked for "
                                   "overspeeded pings address = %s",
                                   GetRemoteAddress().c_str());
-
                     return false;
                 }
             }

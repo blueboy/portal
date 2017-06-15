@@ -76,10 +76,11 @@ enum SpellAuraHolderState
 {
     SPELLAURAHOLDER_STATE_CREATED       = 0,                // just created, initialization steps
     SPELLAURAHOLDER_STATE_READY         = 1,                // all initialization steps are done
-    SPELLAURAHOLDER_STATE_REMOVING      = 2                 // removing steps
+    SPELLAURAHOLDER_STATE_REMOVING      = 2,                // removing steps
+    SPELLAURAHOLDER_STATE_DB_LOAD       = 3                 // during db load some events must not be executed
 };
 
-class MANGOS_DLL_SPEC SpellAuraHolder
+class SpellAuraHolder
 {
     public:
         SpellAuraHolder(SpellEntry const* spellproto, Unit* target, WorldObject* caster, Item* castItem, SpellEntry const* triggeredBy);
@@ -247,7 +248,7 @@ typedef void(Aura::*pAuraHandler)(bool Apply, bool Real);
 //      each setting object update field code line moved under if(Real) check is significant mangos speedup, and less server->client data sends
 //      each packet sending code moved under if(Real) check is _large_ mangos speedup, and lot less server->client data sends
 
-class MANGOS_DLL_SPEC Aura
+class Aura
 {
         friend struct ReapplyAffectedPassiveAurasHelper;
         friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem);
@@ -460,7 +461,7 @@ class MANGOS_DLL_SPEC Aura
                 m_periodicTick = maxticks - GetAuraDuration() / m_modifier.periodictime;
         }
 
-        bool IsPositive() { return m_positive; }
+        bool IsPositive() const { return m_positive; }
         bool IsPersistent() const { return m_isPersistent; }
         bool IsAreaAura() const { return m_isAreaAura; }
         bool IsPeriodic() const { return m_isPeriodic; }
@@ -510,7 +511,7 @@ class MANGOS_DLL_SPEC Aura
         void PeriodicTick();
         void PeriodicDummyTick();
 
-        bool IsCritFromAbilityAura(Unit* caster, uint32& damage);
+        bool IsCritFromAbilityAura(Unit* caster, uint32& damage) const;
         void ReapplyAffectedPassiveAuras();
 
         Modifier m_modifier;
@@ -537,7 +538,7 @@ class MANGOS_DLL_SPEC Aura
         void ReapplyAffectedPassiveAuras(Unit* target, bool owner_mode);
 };
 
-class MANGOS_DLL_SPEC AreaAura : public Aura
+class AreaAura : public Aura
 {
     public:
         AreaAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr, uint32 originalRankSpellId = 0);
@@ -550,7 +551,7 @@ class MANGOS_DLL_SPEC AreaAura : public Aura
         uint32       m_originalRankSpellId;
 };
 
-class MANGOS_DLL_SPEC PersistentAreaAura : public Aura
+class PersistentAreaAura : public Aura
 {
     public:
         PersistentAreaAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr);
@@ -559,7 +560,7 @@ class MANGOS_DLL_SPEC PersistentAreaAura : public Aura
         void Update(uint32 diff) override;
 };
 
-class MANGOS_DLL_SPEC SingleEnemyTargetAura : public Aura
+class SingleEnemyTargetAura : public Aura
 {
         friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem);
 

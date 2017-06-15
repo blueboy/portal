@@ -38,7 +38,7 @@
 #include "Opcodes.h"
 #include "Chat.h"
 
-bool WorldSession::CheckMailBox(ObjectGuid guid)
+bool WorldSession::CheckMailBox(ObjectGuid guid) const
 {
     // GM case
     if (guid == GetPlayer()->GetObjectGuid())
@@ -710,7 +710,7 @@ void WorldSession::HandleGetMailList(WorldPacket& recv_data)
 
     data.put<uint32>(0, realCount);                         // this will display warning about undelivered mail to player if realCount > mailsCount
     data.put<uint8>(4, mailsCount);                         // set real send mails to client
-    SendPacket(&data);
+    SendPacket(data);
 
     // recalculate m_nextMailDelivereTime and unReadMails
     _player->UpdateNextMailTimeAndUnreads();
@@ -841,7 +841,7 @@ void WorldSession::HandleQueryNextMailTime(WorldPacket& /**recv_data*/)
         data << uint32(0xC7A8C000);
         data << uint32(0x00000000);
     }
-    SendPacket(&data);
+    SendPacket(data);
 }
 
 /*! @} */

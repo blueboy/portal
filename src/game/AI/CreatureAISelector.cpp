@@ -16,16 +16,16 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "CreatureAISelector.h"
+#include "AI/CreatureAISelector.h"
 #include "Creature.h"
-#include "CreatureAIImpl.h"
-#include "NullCreatureAI.h"
+#include "AI/BaseAI/CreatureAIImpl.h"
+#include "AI/BaseAI/NullCreatureAI.h"
 #include "Policies/Singleton.h"
 #include "MovementGenerator.h"
-#include "ScriptMgr.h"
+#include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Pet.h"
 #include "Log.h"
-#include "PossessedAI.h"
+#include "AI/BaseAI/PetAI.h"
 
 INSTANTIATE_SINGLETON_1(CreatureAIRegistry);
 INSTANTIATE_SINGLETON_1(MovementGeneratorRegistry);
@@ -34,7 +34,7 @@ namespace FactorySelector
 {
     CreatureAI* selectAI(Creature* creature)
     {
-        if (CreatureAI* scriptedAI = sScriptMgr.GetCreatureAI(creature))
+        if (CreatureAI* scriptedAI = sScriptDevAIMgr.GetCreatureAI(creature))
         {
             // charmed creature may have some script even if its not supposed to be that way (ex: Eye of Acherus)
             // Allow scripting AI for normal creatures and not controlled pets (guardians and mini-pets)
@@ -88,9 +88,21 @@ namespace FactorySelector
         return (ai_factory == nullptr ? new NullCreatureAI(creature) : ai_factory->Create(creature));
     }
 
-    CreatureAI* GetPossessAI(Creature* creature)
+    CreatureAI* GetSpecificAI(Unit* unit, std::string const& ainame)
     {
-        return new PossessedAI(creature);
+        // little hack to not have to change all AI to use Unit instead of Creature
+        Creature* creature = unit->GetTypeId() == TYPEID_UNIT ? static_cast<Creature*>(unit) : nullptr;
+
+        CreatureAIRegistry& ai_registry(CreatureAIRepository::Instance());
+        const CreatureAICreator* ai_factory = ai_registry.GetRegistryItem(ainame);
+        if (creature)
+            return  ai_factory->Create(creature);
+        else if (ainame == "PetAI")
+            return (new PetAI(unit));
+
+        sLog.outError("FactorySelector::GetSpecificAI> Cannot get %s AI for %s", ainame.c_str(), unit->GetObjectGuid().GetString().c_str());
+        MANGOS_ASSERT(false);
+        return nullptr;
     }
 
     MovementGenerator* selectMovementGenerator(Creature* creature)

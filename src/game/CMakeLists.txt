@@ -19,6 +19,7 @@
 set(LIBRARY_NAME game)
 
 add_definitions(-DDT_POLYREF64)
+add_definitions(-D__ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES=0)
 
 # include external dependencies libs headers (warnings disabled)
 include_directories(SYSTEM
@@ -26,6 +27,7 @@ include_directories(SYSTEM
   ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
   ${CMAKE_SOURCE_DIR}/dep/recastnavigation
   ${CMAKE_SOURCE_DIR}/dep/include
+  ${CMAKE_SOURCE_DIR}/dep
   ${MYSQL_INCLUDE_DIR}
 )
 
@@ -73,34 +75,10 @@ set(SRC_GRP_PLAYERBOT
     playerbot/PlayerbotWarriorAI.cpp
     playerbot/PlayerbotWarriorAI.h
 )
-set(SRC_GRP_AI
-    AI/AggressorAI.cpp
-    AI/AggressorAI.h
-    AI/CreatureAI.cpp
-    AI/CreatureAI.h
-    AI/CreatureAIImpl.h
-    AI/CreatureAIRegistry.cpp
-    AI/CreatureAIRegistry.h
-    AI/CreatureAISelector.cpp
-    AI/CreatureAISelector.h
-    AI/CreatureEventAI.cpp
-    AI/CreatureEventAI.h
-    AI/CreatureEventAIMgr.cpp
-    AI/CreatureEventAIMgr.h
-    AI/GuardAI.cpp
-    AI/GuardAI.h
-    AI/GuardianAI.cpp
-    AI/GuardianAI.h
-    AI/NullCreatureAI.cpp
-    AI/NullCreatureAI.h
-    AI/PetAI.cpp
-    AI/PetAI.h
-    AI/PossessedAI.h
-    AI/ReactorAI.cpp
-    AI/ReactorAI.h
-    AI/TotemAI.cpp
-    AI/TotemAI.h
-)
+
+# Find all the input files
+FILE(GLOB_RECURSE SRC_GRP_AI RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 set(SRC_GRP_AHBOT
     AuctionHouseBot/AuctionHouseBot.cpp

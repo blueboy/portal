@@ -20,7 +20,7 @@
 #define _SPELLMGR_H
 
 // For static or at-server-startup loaded spell data
-// For more high level function for sSpellStore data
+// For more high level function for sSpellTemplate data
 
 #include "Common.h"
 #include "SharedDefines.h"
@@ -31,6 +31,7 @@
 #include "GameObject.h"
 #include "Corpse.h"
 #include "Unit.h"
+#include "SQLStorages.h"
 
 #include <map>
 
@@ -285,7 +286,7 @@ inline bool IsSpellEffectAbleToCrit(const SpellEntry* entry, SpellEffectIndex in
         case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
             return true;
         case SPELL_EFFECT_ENERGIZE: // Mana Potion and similar spells, Lay on hands
-            return (entry->SpellFamilyName && entry->DmgClass);
+            return (entry->EffectMiscValue[index] == POWER_MANA && entry->SpellFamilyName && entry->DmgClass);
     }
     return false;
 }
@@ -319,6 +320,11 @@ inline bool IsPassiveSpellStackableWithRanks(SpellEntry const* spellProto)
     return !IsSpellHaveEffect(spellProto, SPELL_EFFECT_APPLY_AURA);
 }
 
+inline bool IsSpellAffectedBySpellMods(SpellEntry const* spellInfo)
+{
+    return !(spellInfo->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_WITH_TRIGGERED) && IsPassiveSpell(spellInfo));
+}
+
 inline bool IsAutocastable(SpellEntry const* spellInfo)
 {
     return !(spellInfo->HasAttribute(SPELL_ATTR_EX_UNAUTOCASTABLE_BY_CHARMED) || spellInfo->HasAttribute(SPELL_ATTR_PASSIVE));
@@ -326,7 +332,7 @@ inline bool IsAutocastable(SpellEntry const* spellInfo)
 
 inline bool IsAutocastable(uint32 spellId)
 {
-    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
+    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
     if (!spellInfo)
         return false;
     return IsAutocastable(spellInfo);
@@ -365,9 +371,75 @@ bool IsExplicitNegativeTarget(uint32 targetA);
 bool IsSingleTargetSpell(SpellEntry const* spellInfo);
 bool IsSingleTargetSpells(SpellEntry const* spellInfo1, SpellEntry const* spellInfo2);
 
-// TODO: research binary spells
 inline bool IsBinarySpell(SpellEntry const* spellInfo)
 {
+    // Spell is considered binary if:
+    // * Its composed entirely out of non-damage and aura effects (Example: Mind Flay, Vampiric Embrace, DoTs, etc)
+    // * Has damage and non-damage effects with additional mechanics (Example: Death Coil, Frost Nova)
+    uint32 effectmask = 0;  // A bitmask of effects: set bits are valid effects
+    uint32 nondmgmask = 0;  // A bitmask of effects: set bits are non-damage effects
+    uint32 mechmask = 0;    // A bitmask of effects: set bits are non-damage effects with additional mechanics
+    for (uint32 i = EFFECT_INDEX_0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (!spellInfo->Effect[i] || IsSpellEffectTriggerSpell(spellInfo, SpellEffectIndex(i)))
+            continue;
+
+        effectmask |= (1 << i);
+
+        bool damage = false;
+        if (!spellInfo->EffectApplyAuraName[i])
+        {
+            // If its not an aura effect, check for damage effects
+            switch (spellInfo->Effect[i])
+            {
+                case SPELL_EFFECT_SCHOOL_DAMAGE:
+                case SPELL_EFFECT_ENVIRONMENTAL_DAMAGE:
+                case SPELL_EFFECT_HEALTH_LEECH:
+                case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+                case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+                case SPELL_EFFECT_WEAPON_DAMAGE:
+                //   SPELL_EFFECT_POWER_BURN: deals damage for power burned, but its either full damage or resist?
+                case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+                    damage = true;
+                    break;
+            }
+        }
+        if (!damage)
+        {
+            nondmgmask |= (1 << i);
+            if (spellInfo->EffectMechanic[i])
+                mechmask |= (1 << i);
+        }
+    }
+    // No non-damage involved at all: assumed all effects which should be rolled separately or no effects
+    if (!effectmask || !nondmgmask)
+        return false;
+    // All effects are non-damage
+    if (nondmgmask == effectmask)
+        return true;
+    // No non-damage effects with additional mechanics
+    if (!mechmask)
+        return false;
+    // Binary spells execution order detection
+    for (uint32 i = EFFECT_INDEX_0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        // If effect is present and not a non-damage effect
+        const uint32 effect = (1 << i);
+        if ((effectmask & effect) && !(nondmgmask & effect))
+        {
+            // Iterate over mechanics
+            for (uint32 e = EFFECT_INDEX_0; e < MAX_EFFECT_INDEX; ++e)
+            {
+                // If effect is extra mechanic on the same target as damage effect
+                if ((mechmask & (1 << e)) &&
+                    spellInfo->EffectImplicitTargetA[i] == spellInfo->EffectImplicitTargetA[e] &&
+                    spellInfo->EffectImplicitTargetB[i] == spellInfo->EffectImplicitTargetB[e])
+                {
+                    return (e > i); // Post-2.3: checks the order of application
+                }
+            }
+        }
+    }
     return false;
 }
 
@@ -598,6 +670,7 @@ inline bool IsNeutralTarget(uint32 target)
         case TARGET_DYNAMIC_OBJECT_BEHIND:
         case TARGET_DYNAMIC_OBJECT_LEFT_SIDE:
         case TARGET_DYNAMIC_OBJECT_RIGHT_SIDE:
+        case TARGET_DEST_CASTER_FRONT_LEAP:
         case TARGET_58:
         case TARGET_DUELVSPLAYER_COORDINATES:
         case TARGET_INFRONT_OF_VICTIM:
@@ -608,7 +681,7 @@ inline bool IsNeutralTarget(uint32 target)
         case TARGET_RANDOM_NEARBY_LOC:
         case TARGET_RANDOM_CIRCUMFERENCE_POINT:
         case TARGET_74:
-        case TARGET_75:
+        case TARGET_RANDOM_CIRCUMFERENCE_AROUND_TARGET:
         case TARGET_DYNAMIC_OBJECT_COORDINATES:
         case TARGET_POINT_AT_NORTH:
         case TARGET_POINT_AT_SOUTH:
@@ -731,7 +804,7 @@ inline bool IsNeutralEffectTargetPositive(uint32 etarget, const WorldObject* cas
         case TARGET_58:
         case TARGET_70:
         case TARGET_74:
-        case TARGET_75:
+        case TARGET_RANDOM_CIRCUMFERENCE_AROUND_TARGET:
         case TARGET_SUMMONER:
         case TARGET_VEHICLE_DRIVER:
         case TARGET_VEHICLE_PASSENGER_0:
@@ -786,7 +859,7 @@ inline bool IsPositiveEffectTargetMode(const SpellEntry* entry, SpellEffectIndex
         // Its possible to go infinite cycle with triggered spells. We are interested to peek only at the first layer so far
         if (!recursive && spellid && (spellid != entry->Id))
         {
-            if (const SpellEntry* triggered = sSpellStore.LookupEntry(spellid))
+            if (const SpellEntry* triggered = sSpellTemplate.LookupEntry<SpellEntry>(spellid))
             {
                 for (uint32 i = EFFECT_INDEX_0; i < MAX_EFFECT_INDEX; ++i)
                 {
@@ -846,11 +919,12 @@ inline bool IsPositiveEffect(const SpellEntry* spellproto, SpellEffectIndex effI
             // some explicitly required dummy effect sets
             switch (spellproto->Id)
             {
-                case 28441:                                 // AB Effect 000
-                    return false;
                 case 18153:                                 // Kodo Kombobulator
                 case 62105:                                 // To'kini's Blowgun
                     return true;
+                case 28441:                                 // AB Effect 000
+                case 42442:                                 // Vengeance Landing Cannonfire
+                    return false;
                 default:
                     break;
             }
@@ -879,8 +953,14 @@ inline bool IsPositiveEffect(const SpellEntry* spellproto, SpellEffectIndex effI
                         case 13139:                         // net-o-matic special effect
                         case 44877:                         // Living Flare Master
                             return false;
-                        case 70346:
-                            return true;                    // Slime Puddle
+                        case 39834:                         // Vimgol population tester
+                        case 39851:                         // Vimgol population tester
+                        case 39852:                         // Vimgol population tester
+                        case 39853:                         // Vimgol population tester
+                        case 39854:                         // Vimgol population tester
+                        case 39921:                         // Vimgol Pentagram Beam
+                        case 70346:                         // Slime Puddle
+                            return true;
                         default:
                             break;
                     }
@@ -937,7 +1017,7 @@ inline bool IsPositiveSpellTargetModeForSpecificTarget(uint32 spellId, uint8 eff
 {
     if (!spellId)
         return false;
-    return IsPositiveSpellTargetModeForSpecificTarget(sSpellStore.LookupEntry(spellId), effectMask, caster, target);
+    return IsPositiveSpellTargetModeForSpecificTarget(sSpellTemplate.LookupEntry<SpellEntry>(spellId), effectMask, caster, target);
 }
 
 inline bool IsPositiveSpellTargetMode(const SpellEntry* entry, const WorldObject* caster = nullptr, const WorldObject* target = nullptr)
@@ -956,7 +1036,7 @@ inline bool IsPositiveSpellTargetMode(uint32 spellId, const WorldObject* caster,
 {
     if (!spellId)
         return false;
-    return IsPositiveSpellTargetMode(sSpellStore.LookupEntry(spellId), caster, target);
+    return IsPositiveSpellTargetMode(sSpellTemplate.LookupEntry<SpellEntry>(spellId), caster, target);
 }
 
 inline bool IsPositiveSpell(const SpellEntry* entry, const WorldObject* caster = nullptr, const WorldObject* target = nullptr)
@@ -975,7 +1055,7 @@ inline bool IsPositiveSpell(uint32 spellId, const WorldObject* caster = nullptr,
 {
     if (!spellId)
         return false;
-    return IsPositiveSpell(sSpellStore.LookupEntry(spellId), caster, target);
+    return IsPositiveSpell(sSpellTemplate.LookupEntry<SpellEntry>(spellId), caster, target);
 }
 
 inline bool IsDispelSpell(SpellEntry const* spellInfo)
@@ -997,6 +1077,8 @@ inline bool IsSpellRequiresRangedAP(SpellEntry const* spellInfo)
 {
     return (spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && spellInfo->DmgClass != SPELL_DAMAGE_CLASS_MELEE);
 }
+
+uint32 GetAffectedTargets(SpellEntry const* spellInfo, Unit* caster);
 
 SpellCastResult GetErrorAtShapeshiftedCast(SpellEntry const* spellInfo, uint32 form);
 
@@ -1024,6 +1106,20 @@ inline bool IsReflectableSpell(SpellEntry const* spellInfo)
     return spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC && !spellInfo->HasAttribute(SPELL_ATTR_ABILITY)
         && !spellInfo->HasAttribute(SPELL_ATTR_EX_CANT_BE_REFLECTED) && !spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY)
         && !spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) && !IsPositiveSpell(spellInfo);
+}
+
+// Mostly required by spells that target a creature inside GO
+inline bool IsIgnoreLosSpell(SpellEntry const* spellInfo)
+{
+    switch (spellInfo->Id)
+    {
+        case 36795:                                 // Cannon Channel
+            return true;
+        default:
+            break;
+    }
+
+    return spellInfo->rangeIndex == 13 || spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS);
 }
 
 inline bool NeedsComboPoints(SpellEntry const* spellInfo)
@@ -1111,17 +1207,17 @@ enum ProcFlags
     PROC_FLAG_SUCCESSFUL_RANGED_SPELL_HIT   = 0x00000100,   // 08 Successful Ranged attack by Spell that use ranged weapon
     PROC_FLAG_TAKEN_RANGED_SPELL_HIT        = 0x00000200,   // 09 Taken damage by Spell that use ranged weapon
 
-    PROC_FLAG_SUCCESSFUL_POSITIVE_AOE_HIT   = 0x00000400,   // 10 Successful AoE (not 100% shure unused)
-    PROC_FLAG_TAKEN_POSITIVE_AOE            = 0x00000800,   // 11 Taken AoE      (not 100% shure unused)
+    PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS     = 0x00000400,  // 10 Done positive spell that has dmg class none
+    PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS    = 0x00000800,  // 11 Taken positive spell that has dmg class none
 
-    PROC_FLAG_SUCCESSFUL_AOE_SPELL_HIT      = 0x00001000,   // 12 Successful AoE damage spell hit (not 100% shure unused)
-    PROC_FLAG_TAKEN_AOE_SPELL_HIT           = 0x00002000,   // 13 Taken AoE damage spell hit      (not 100% shure unused)
+    PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG     = 0x00001000,  // 12 Done negative spell that has dmg class none
+    PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG    = 0x00002000,  // 13 Taken negative spell that has dmg class none
 
-    PROC_FLAG_SUCCESSFUL_POSITIVE_SPELL     = 0x00004000,   // 14 Successful cast positive spell (by default only on healing)
-    PROC_FLAG_TAKEN_POSITIVE_SPELL          = 0x00008000,   // 15 Taken positive spell hit (by default only on healing)
+    PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS    = 0x00004000,  // 14 Successful cast positive spell (by default only on healing)
+    PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS   = 0x00008000,  // 15 Taken positive spell hit (by default only on healing)
 
-    PROC_FLAG_SUCCESSFUL_NEGATIVE_SPELL_HIT = 0x00010000,   // 16 Successful negative spell cast (by default only on damage)
-    PROC_FLAG_TAKEN_NEGATIVE_SPELL_HIT      = 0x00020000,   // 17 Taken negative spell (by default only on damage)
+    PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG    = 0x00010000,  // 16 Successful negative spell cast (by default only on damage)
+    PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG   = 0x00020000,  // 17 Taken negative spell (by default only on damage)
 
     PROC_FLAG_ON_DO_PERIODIC                = 0x00040000,   // 18 Successful do periodic (damage / healing, determined by PROC_EX_PERIODIC_POSITIVE or negative if no procEx)
     PROC_FLAG_ON_TAKE_PERIODIC              = 0x00080000,   // 19 Taken spell periodic (damage / healing, determined by PROC_EX_PERIODIC_POSITIVE or negative if no procEx)
@@ -1143,18 +1239,18 @@ enum ProcFlags
                                   PROC_FLAG_TAKEN_RANGED_SPELL_HIT)
 
 #define NEGATIVE_TRIGGER_MASK (MELEE_BASED_TRIGGER_MASK                | \
-                               PROC_FLAG_SUCCESSFUL_AOE_SPELL_HIT      | \
-                               PROC_FLAG_TAKEN_AOE_SPELL_HIT           | \
-                               PROC_FLAG_SUCCESSFUL_NEGATIVE_SPELL_HIT | \
-                               PROC_FLAG_TAKEN_NEGATIVE_SPELL_HIT)
+                               PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG      | \
+                               PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG           | \
+                               PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG | \
+                               PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG)
 
 #define SPELL_CAST_TRIGGER_MASK (PROC_FLAG_SUCCESSFUL_MELEE_SPELL_HIT    | \
                                  PROC_FLAG_SUCCESSFUL_RANGED_HIT         | \
                                  PROC_FLAG_SUCCESSFUL_RANGED_SPELL_HIT   | \
-                                 PROC_FLAG_SUCCESSFUL_POSITIVE_AOE_HIT   | \
-                                 PROC_FLAG_SUCCESSFUL_AOE_SPELL_HIT      | \
-                                 PROC_FLAG_SUCCESSFUL_POSITIVE_SPELL     | \
-                                 PROC_FLAG_SUCCESSFUL_NEGATIVE_SPELL_HIT)
+                                 PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS | \
+                                 PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG | \
+                                 PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS| \
+                                 PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG)
 enum ProcFlagsEx
 {
     PROC_EX_NONE                = 0x0000000,                // If none can tigger on Hit/Crit only (passive spells MUST defined by SpellFamily flag)
@@ -1177,7 +1273,10 @@ enum ProcFlagsEx
     PROC_EX_EX_TRIGGER_ALWAYS   = 0x0010000,                // If set trigger always ( no matter another flags) used for drop charges
     PROC_EX_EX_ONE_TIME_TRIGGER = 0x0020000,                // If set trigger always but only one time (not used)
     PROC_EX_PERIODIC_POSITIVE   = 0x0040000,                // For periodic heal
-    PROC_EX_CAST_END            = 0x0080000                 // procs on end of cast
+    PROC_EX_CAST_END            = 0x0080000,                // procs on end of cast
+
+    // Flags for internal use - do not use these in db!
+    PROC_EX_INTERNAL_HOT        = 0x2000000
 };
 
 struct SpellProcEventEntry
@@ -1613,7 +1712,7 @@ class SpellMgr
         static bool IsProfessionSpell(uint32 spellId);
         static bool IsPrimaryProfessionSpell(uint32 spellId);
         bool IsPrimaryProfessionFirstRankSpell(uint32 spellId) const;
-        uint32 GetProfessionSpellMinLevel(uint32 spellId);
+        uint32 GetProfessionSpellMinLevel(uint32 spellId) const;
 
         bool IsSkillBonusSpell(uint32 spellId) const;
 
@@ -1657,7 +1756,7 @@ class SpellMgr
             return nullptr;
         }
 
-        SpellCastResult GetSpellAllowedInLocationError(SpellEntry const* spellInfo, uint32 map_id, uint32 zone_id, uint32 area_id, Player const* player = nullptr);
+        SpellCastResult GetSpellAllowedInLocationError(SpellEntry const* spellInfo, uint32 map_id, uint32 zone_id, uint32 area_id, Player const* player = nullptr) const;
 
         SpellAreaMapBounds GetSpellAreaMapBounds(uint32 spell_id) const
         {
@@ -1678,7 +1777,7 @@ class SpellMgr
     public:
         static SpellMgr& Instance();
 
-        void CheckUsedSpells(char const* table);
+        void CheckUsedSpells(char const* table) const;
 
         // Loading data at server startup
         void LoadSpellChains();

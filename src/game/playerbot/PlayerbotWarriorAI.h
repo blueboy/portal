@@ -75,7 +75,7 @@ enum WarriorSpells
 
 //class Player;
 
-class MANGOS_DLL_SPEC PlayerbotWarriorAI : PlayerbotClassAI
+class PlayerbotWarriorAI : PlayerbotClassAI
 {
 public:
     PlayerbotWarriorAI(Player * const master, Player * const bot, PlayerbotAI * const ai);

@@ -31,13 +31,16 @@ extern SQLStorage sItemStorage;
 extern SQLStorage sInstanceTemplate;
 extern SQLStorage sWorldTemplate;
 extern SQLStorage sConditionStorage;
+extern SQLStorage sSpellTemplate;
+extern SQLStorage sDungeonEncounterStore;
 
-extern SQLHashStorage sSpellTemplate;
 extern SQLHashStorage sGOStorage;
 extern SQLHashStorage sGameObjectDataAddonStorage;
 extern SQLHashStorage sCreatureTemplateSpellsStorage;
 
 extern SQLMultiStorage sVehicleAccessoryStorage;
 extern SQLMultiStorage sSpellScriptTargetStorage;
+
+SQLStorage                 const* GetSpellStore();
 
 #endif

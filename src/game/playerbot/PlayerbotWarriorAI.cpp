@@ -536,7 +536,7 @@ bool PlayerbotWarriorAI::Pull()
         // activate auto shot: Reworked to account for AUTO_SHOT being a triggered spell
         if (AUTO_SHOT && m_ai->GetCurrentSpellId() != AUTO_SHOT)
         {
-            m_bot->CastSpell(m_ai->GetCurrentTarget(), AUTO_SHOT, true);
+            m_bot->CastSpell(m_ai->GetCurrentTarget(), AUTO_SHOT, TRIGGERED_OLD_TRIGGERED);
             return true;
         }
     }

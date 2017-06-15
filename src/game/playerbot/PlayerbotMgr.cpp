@@ -105,7 +105,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
             p << uint32(PETITION_SIGN_OK);
 
             // close at signer side
-            GetMaster()->GetSession()->SendPacket(&p);
+            GetMaster()->GetSession()->SendPacket(p);
 
             return;
         }
@@ -253,7 +253,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                         if (bot->m_taxi.SetTaximaskNode(sourcenode))
                         {
                             WorldPacket data(SMSG_NEW_TAXI_PATH, 0);
-                            bot->GetSession()->SendPacket(&data);
+                            bot->GetSession()->SendPacket(data);
                         }
 
                         // DEBUG_LOG ("[PlayerbotMgr]: HandleMasterIncomingPacket - Received CMSG_MOVE_SPLINE_DONE Taxi has to go from %u to %u", sourcenode, destinationnode);
@@ -1025,7 +1025,7 @@ void Player::MakeTalentGlyphLink(std::ostringstream &out)
 
                     TalentEntry const* talentInfo = sTalentStore.LookupEntry(talent.talentEntry->TalentID);
 
-                    SpellEntry const* spell_entry = sSpellStore.LookupEntry(talentInfo->RankID[talent.currentRank]);
+                    SpellEntry const* spell_entry = sSpellTemplate.LookupEntry<SpellEntry>(talentInfo->RankID[talent.currentRank]);
 
                     out << "|cff4e96f7|Htalent:" << talent.talentEntry->TalentID << ":" << talent.currentRank
                         << " |h[" << spell_entry->SpellName[GetSession()->GetSessionDbcLocale()] << "]|h|r";
@@ -1049,7 +1049,7 @@ void Player::MakeTalentGlyphLink(std::ostringstream &out)
                 if (!glyph)
                     continue;
 
-                SpellEntry const* spell_entry = sSpellStore.LookupEntry(glyph->SpellId);
+                SpellEntry const* spell_entry = sSpellTemplate.LookupEntry<SpellEntry>(glyph->SpellId);
 
                 out << "|cff66bbff|Hglyph:" << GetGlyphSlot(i) << ":" << m_glyphs[specIdx][i].GetId()
                     << " |h[" << spell_entry->SpellName[GetSession()->GetSessionDbcLocale()] << "]|h|r";

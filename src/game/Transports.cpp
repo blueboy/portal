@@ -27,7 +27,7 @@
 #include "WorldPacket.h"
 #include "DBCStores.h"
 #include "ProgressBar.h"
-#include "ScriptMgr.h"
+#include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 
 void MapManager::LoadTransports()
 {
@@ -466,7 +466,7 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 
         // WorldPacket data(SMSG_811, 4);
         // data << uint32(0);
-        // plr->GetSession()->SendPacket(&data);
+        // plr->GetSession()->SendPacket(data);
     }
 
     // we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
@@ -556,8 +556,8 @@ void Transport::UpdateForMap(Map const* targetMap)
                 UpdateData transData;
                 BuildCreateUpdateBlockForPlayer(&transData, itr->getSource());
                 WorldPacket packet;
-                transData.BuildPacket(&packet);
-                itr->getSource()->SendDirectMessage(&packet);
+                transData.BuildPacket(packet);
+                itr->getSource()->SendDirectMessage(packet);
             }
         }
     }
@@ -566,11 +566,11 @@ void Transport::UpdateForMap(Map const* targetMap)
         UpdateData transData;
         BuildOutOfRangeUpdateBlock(&transData);
         WorldPacket out_packet;
-        transData.BuildPacket(&out_packet);
+        transData.BuildPacket(out_packet);
 
         for (Map::PlayerList::const_iterator itr = pl.begin(); itr != pl.end(); ++itr)
             if (this != itr->getSource()->GetTransport())
-                itr->getSource()->SendDirectMessage(&out_packet);
+                itr->getSource()->SendDirectMessage(out_packet);
     }
 }
 
@@ -580,7 +580,6 @@ void Transport::DoEventIfAny(WayPointMap::value_type const& node, bool departure
     {
         DEBUG_FILTER_LOG(LOG_FILTER_TRANSPORT_MOVES, "Taxi %s event %u of node %u of %s \"%s\") path", departure ? "departure" : "arrival", eventid, node.first, GetGuidStr().c_str(), GetName());
 
-        if (!sScriptMgr.OnProcessEvent(eventid, this, this, departure))
-            GetMap()->ScriptsStart(sEventScripts, eventid, this, this);
+        StartEvents_Event(GetMap(), eventid, this, this, departure);
     }
 }

@@ -20,7 +20,7 @@
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "Creature.h"
-#include "AI/CreatureAI.h"
+#include "AI/BaseAI/CreatureAI.h"
 #include "WaypointManager.h"
 #include "ScriptMgr.h"
 #include "movement/MoveSplineInit.h"
@@ -68,9 +68,9 @@ void WaypointMovementGenerator<Creature>::Initialize(Creature& creature)
     creature.clearUnitState(UNIT_STAT_WAYPOINT_PAUSED);
 }
 
-void WaypointMovementGenerator<Creature>::InitializeWaypointPath(Creature& u, int32 id, WaypointPathOrigin wpSource, uint32 initialDelay, uint32 overwriteEntry)
+void WaypointMovementGenerator<Creature>::InitializeWaypointPath(Creature& u, int32 pathId, WaypointPathOrigin wpSource, uint32 initialDelay, uint32 overwriteEntry)
 {
-    LoadPath(u, id, wpSource, overwriteEntry);
+    LoadPath(u, pathId, wpSource, overwriteEntry);
     i_nextMoveTime.Reset(initialDelay);
     // Start moving if possible
     StartMove(u);
@@ -125,7 +125,7 @@ void WaypointMovementGenerator<Creature>::OnArrived(Creature& creature)
             creature.HandleEmote(behavior->emote);
 
         if (behavior->spell != 0)
-            creature.CastSpell(&creature, behavior->spell, false);
+            creature.CastSpell(&creature, behavior->spell, TRIGGERED_NONE);
 
         if (behavior->model1 != 0)
             creature.SetDisplayId(behavior->model1);
@@ -389,7 +389,7 @@ void FlightPathMovementGenerator::Finalize(Player& player)
     {
         player.getHostileRefManager().setOnlineOfflineState(true);
         if (player.pvpInfo.inHostileArea)
-            player.CastSpell(&player, 2479, true);
+            player.CastSpell(&player, 2479, TRIGGERED_OLD_TRIGGERED);
 
         // update z position to ground and orientation for landing point
         // this prevent cheating with landing  point at lags

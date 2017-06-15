@@ -116,8 +116,6 @@ struct GridMapLiquidData
 class GridMap
 {
     private:
-
-        uint16 m_holes[16][16];
         uint32 m_flags;
 
         // Area data
@@ -151,6 +149,8 @@ class GridMap
         uint8* m_liquidFlags;
         float* m_liquid_map;
 
+        uint16* m_holes;
+
         bool loadAreaData(FILE* in, uint32 offset, uint32 size);
         bool loadHeightData(FILE* in, uint32 offset, uint32 size);
         bool loadGridMapLiquidData(FILE* in, uint32 offset, uint32 size);
@@ -170,21 +170,21 @@ class GridMap
         GridMap();
         ~GridMap();
 
-        bool loadData(char* filaname);
+        bool loadData(char const* filaname);
         void unloadData();
 
         static bool ExistMap(uint32 mapid, int gx, int gy);
         static bool ExistVMap(uint32 mapid, int gx, int gy);
 
-        uint16 getArea(float x, float y);
-        float getHeight(float x, float y) { return (this->*m_gridGetHeight)(x, y); }
-        float getLiquidLevel(float x, float y);
-        uint8 getTerrainType(float x, float y);
+        uint16 getArea(float x, float y) const;
+        inline float getHeight(float x, float y) { return (this->*m_gridGetHeight)(x, y); }
+        float getLiquidLevel(float x, float y) const;
+        uint8 getTerrainType(float x, float y) const;
         GridMapLiquidStatus getLiquidStatus(float x, float y, float z, uint8 ReqLiquidType, GridMapLiquidData* data = nullptr);
 };
 
 template<typename Countable>
-class MANGOS_DLL_SPEC Referencable
+class Referencable
 {
     public:
         Referencable() { m_count = 0; }
@@ -208,22 +208,23 @@ class MANGOS_DLL_SPEC Referencable
 #define DEFAULT_WATER_SEARCH      50.0f                     // default search distance to case detection water level
 
 // class for sharing and managin GridMap objects
-class MANGOS_DLL_SPEC TerrainInfo : public Referencable<std::atomic_long>
+class TerrainInfo : public Referencable<std::atomic_long>
 {
     public:
-        TerrainInfo(uint32 mapid);
+        TerrainInfo(uint32 mapId);
         ~TerrainInfo();
 
         uint32 GetMapId() const { return m_mapId; }
 
         // TODO: move all terrain/vmaps data info query functions
         // from 'Map' class into this class
-        float GetHeightStatic(float x, float y, float z, bool checkVMap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const;
+        float GetHeightStatic(float x, float y, float z, bool useVmaps = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH) const;
         float GetWaterLevel(float x, float y, float z, float* pGround = nullptr) const;
         float GetWaterOrGroundLevel(float x, float y, float z, float* pGround = nullptr, bool swim = false) const;
-        bool IsInWater(float x, float y, float z, GridMapLiquidData* data = nullptr) const;
+        bool IsInWater(float x, float y, float z, GridMapLiquidData* data = nullptr, float min_depth = 2.0f) const;
         bool IsSwimmable(float x, float y, float pZ, float radius = 1.5f, GridMapLiquidData* data = nullptr) const;
-        bool IsUnderWater(float x, float y, float z) const;
+        bool IsAboveWater(float x, float y, float z, float* pWaterZ = nullptr) const;
+        bool IsUnderWater(float x, float y, float z, float* pWaterZ = nullptr) const;
 
         GridMapLiquidStatus getLiquidStatus(float x, float y, float z, uint8 ReqLiquidType, GridMapLiquidData* data = nullptr) const;
 
@@ -299,7 +300,7 @@ class TerrainManager : public MaNGOS::Singleton<TerrainManager, MaNGOS::ClassLev
         {
             return TerrainManager::GetZoneIdByAreaFlag(GetAreaFlag(mapid, x, y, z), mapid);
         }
-        void GetZoneAndAreaId(uint32& zoneid, uint32& areaid, uint32 mapid, float x, float y, float z)
+        void GetZoneAndAreaId(uint32& zoneid, uint32& areaid, uint32 mapid, float x, float y, float z) const
         {
             TerrainManager::GetZoneAndAreaIdByAreaFlag(zoneid, areaid, GetAreaFlag(mapid, x, y, z), mapid);
         }

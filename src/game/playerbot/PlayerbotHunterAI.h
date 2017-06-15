@@ -83,7 +83,7 @@ enum HunterSpells
 
 //class Player;
 
-class MANGOS_DLL_SPEC PlayerbotHunterAI : PlayerbotClassAI
+class PlayerbotHunterAI : PlayerbotClassAI
 {
 public:
     PlayerbotHunterAI(Player * const master, Player * const bot, PlayerbotAI * const ai);

@@ -791,7 +791,7 @@ bool AuctionSorter::operator()(const AuctionEntry* auc1, const AuctionEntry* auc
 }
 
 void WorldSession::BuildListAuctionItems(std::vector<AuctionEntry*> const& auctions, WorldPacket& data, std::wstring const& wsearchedname, uint32 listfrom, uint32 levelmin,
-        uint32 levelmax, uint32 usable, uint32 inventoryType, uint32 itemClass, uint32 itemSubClass, uint32 quality, uint32& count, uint32& totalcount, bool isFull)
+        uint32 levelmax, uint32 usable, uint32 inventoryType, uint32 itemClass, uint32 itemSubClass, uint32 quality, uint32& count, uint32& totalcount, bool isFull) const
 {
     int loc_idx = _player->GetSession()->GetSessionDbLocaleIndex();
 
@@ -835,7 +835,7 @@ void WorldSession::BuildListAuctionItems(std::vector<AuctionEntry*> const& aucti
 
                 if (proto->Class == ITEM_CLASS_RECIPE)
                 {
-                    if (SpellEntry const* spell = sSpellStore.LookupEntry(proto->Spells[0].SpellId))
+                    if (SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(proto->Spells[0].SpellId))
                     {
                         if (_player->HasSpell(spell->EffectTriggerSpell[EFFECT_INDEX_0]))
                             continue;

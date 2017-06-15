@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "SharedDefines.h"
 #include "Object.h"
+#include "Util.h"
 
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push,N), also any gcc version not support it at some platform
 #if defined( __GNUC__ )
@@ -42,6 +43,7 @@ struct GameObjectInfo
     char*   unk1;
     uint32  faction;
     uint32  flags;
+    uint32  ExtraFlags;
     float   size;
     uint32  questItems[6];
     union                                                   // different GO types have different data field
@@ -395,6 +397,20 @@ struct GameObjectInfo
         } raw;
     };
 
+    union
+    {
+        //6 GAMEOBJECT_TYPE_TRAP
+        struct
+        {
+            uint32 triggerOn;
+        } trapCustom;
+
+        struct
+        {
+            uint32 data[1];
+        } rawCustom;
+    };
+
     uint32 MinMoneyLoot;
     uint32 MaxMoneyLoot;
     uint32 ScriptId;
@@ -557,10 +573,12 @@ struct GameObjectData
     float posZ;
     float orientation;
     QuaternionData rotation;
-    int32  spawntimesecs;
+    int32 spawntimesecsmin;
+    int32 spawntimesecsmax;
     uint32 animprogress;
     GOState go_state;
     uint8 spawnMask;
+    uint32 GetRandomRespawnTime() const { return urand(uint32(spawntimesecsmin), uint32(spawntimesecsmax)); }
 };
 
 // from `gameobject_addon`
@@ -600,6 +618,11 @@ enum CapturePointSliderValue
     CAPTURE_SLIDER_MIDDLE           = 50                    // middle
 };
 
+enum GameobjectExtraFlags
+{
+    GAMEOBJECT_EXTRA_FLAG_CUSTOM_ANIM_ON_USE = 0x00000001,    // GO that plays custom animation on usage
+};
+
 class Unit;
 class GameObjectModel;
 struct GameObjectDisplayInfoEntry;
@@ -609,7 +632,7 @@ struct GameObjectDisplayInfoEntry;
 
 #define GO_ANIMPROGRESS_DEFAULT 0xFF
 
-class MANGOS_DLL_SPEC GameObject : public WorldObject
+class GameObject : public WorldObject
 {
     public:
         explicit GameObject();
@@ -638,9 +661,9 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         const char* GetNameForLocaleIdx(int32 locale_idx) const override;
 
         void SaveToDB();
-        void SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask);
+        void SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask) const;
         bool LoadFromDB(uint32 guid, Map* map);
-        void DeleteFromDB();
+        void DeleteFromDB() const;
 
         void SetOwnerGuid(ObjectGuid ownerGuid)
         {
@@ -748,8 +771,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         bool IsHostileTo(Unit const* unit) const override;
         bool IsFriendlyTo(Unit const* unit) const override;
 
-        void SummonLinkedTrapIfAny();
-        void TriggerLinkedGameObject(Unit* target);
+        void SummonLinkedTrapIfAny() const;
+        void TriggerLinkedGameObject(Unit* target) const;
 
         // Destructible GO handling
         void DealGameObjectDamage(uint32 damage, uint32 spell, Unit* caster);
@@ -762,12 +785,12 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
 
         bool IsCollisionEnabled() const;                    // Check if a go should collide. Like if a door is closed
 
-        GameObject* LookupFishingHoleAround(float range);
+        GameObject* LookupFishingHoleAround(float range) const;
 
         void SetCapturePointSlider(float value, bool isLocked);
         float GetCapturePointSliderValue() const { return m_captureSlider; }
 
-        float GetInteractionDistance();
+        float GetInteractionDistance() const;
 
         GridReference<GameObject>& GetGridRef() { return m_gridRef; }
 

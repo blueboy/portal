@@ -170,6 +170,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -209,6 +210,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -244,6 +246,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -282,6 +285,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -317,6 +321,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -355,6 +360,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CallingConvention>Cdecl</CallingConvention>
       <CompileAs>Default</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -373,34 +379,6 @@
 </Command>
       <AdditionalInputs>$(ProjectDir)..\..\.svn\entries;$(ProjectDir)..\..\_svn\entries;$(ProjectDir)..\..\.git\FETCH_HEAD;%(AdditionalInputs)</AdditionalInputs>
       <Outputs>revision.h;%(Outputs)</Outputs>
-    </CustomBuild>
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="..\..\src\shared\SystemConfig.h.in">
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|X64'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|X64'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|X64'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|Win32'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|Win32'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|Win32'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|X64'">Performing Build SystemConfig.h</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|X64'">copy ..\..\src\shared\SystemConfig.h.in ..\..\src\shared\SystemConfig.h
-</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug_NoPCH|X64'">..\..\src\shared\SystemConfig.h;%(Outputs)</Outputs>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>

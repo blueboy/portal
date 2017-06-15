@@ -85,6 +85,7 @@ struct AreaTrigger
     float  target_Y;
     float  target_Z;
     float  target_Orientation;
+    uint32 conditionId;
 
     // Operators
     bool IsMinimal() const
@@ -387,20 +388,24 @@ enum ConditionType
     CONDITION_DEAD_OR_AWAY          = 36,                   // value1: 0=player dead, 1=player is dead (with group dead), 2=player in instance are dead, 3=creature is dead
                                                             // value2: if != 0 only consider players in range of this value
     CONDITION_CREATURE_IN_RANGE     = 37,                   // value1: creature entry; value2: range; returns only alive creatures
+    CONDITION_PVP_SCRIPT            = 38,                   // value1: zoneId; value2: conditionId (usually hardcoded in the script);
 };
 
 enum ConditionSource                                        // From where was the condition called?
 {
-    CONDITION_FROM_LOOT             = 0,                    // Used to check a *_loot_template entry
-    CONDITION_FROM_REFERING_LOOT    = 1,                    // Used to check a entry refering to a reference_loot_template entry
-    CONDITION_FROM_GOSSIP_MENU      = 2,                    // Used to check a gossip menu menu-text
-    CONDITION_FROM_GOSSIP_OPTION    = 3,                    // Used to check a gossip menu option-item
-    CONDITION_FROM_EVENTAI          = 4,                    // Used to check EventAI Event "On Receive Emote"
-    CONDITION_FROM_HARDCODED        = 5,                    // Used to check a hardcoded event - not actually a condition
-    CONDITION_FROM_VENDOR           = 6,                    // Used to check a condition from a vendor
-    CONDITION_FROM_SPELL_AREA       = 7,                    // Used to check a condition from spell_area table
-    CONDITION_FROM_SPELLCLICK       = 8,                    // Used to check a condition from npc_spellclick_spells table
-    CONDITION_FROM_DBSCRIPTS        = 9,                    // Used to check a condition from DB Scripts Engine
+    CONDITION_FROM_LOOT                 = 0,                    // Used to check a *_loot_template entry
+    CONDITION_FROM_REFERING_LOOT        = 1,                    // Used to check a entry refering to a reference_loot_template entry
+    CONDITION_FROM_GOSSIP_MENU          = 2,                    // Used to check a gossip menu menu-text
+    CONDITION_FROM_GOSSIP_OPTION        = 3,                    // Used to check a gossip menu option-item
+    CONDITION_FROM_EVENTAI              = 4,                    // Used to check EventAI Event "On Receive Emote"
+    CONDITION_FROM_HARDCODED            = 5,                    // Used to check a hardcoded event - not actually a condition
+    CONDITION_FROM_VENDOR               = 6,                    // Used to check a condition from a vendor
+    CONDITION_FROM_SPELL_AREA           = 7,                    // Used to check a condition from spell_area table
+    CONDITION_FROM_SPELLCLICK           = 8,                    // Used to check a condition from npc_spellclick_spells table
+    CONDITION_FROM_DBSCRIPTS            = 9,                    // Used to check a condition from DB Scripts Engine
+    CONDITION_FROM_TRAINER              = 10,                   // Used to check a condition from npc_trainer and npc_trainer_template
+    CONDITION_FROM_AREATRIGGER_TELEPORT = 11,                   // Used to check a condition from areatrigger_teleport
+    CONDITION_FROM_QUEST                = 12,                   // Used to check a condition from quest_template
 };
 
 class PlayerCondition
@@ -453,7 +458,7 @@ SkillRangeType GetSkillRangeType(SkillLineEntry const* pSkill, bool racial);
 
 bool normalizePlayerName(std::string& name);
 
-struct MANGOS_DLL_SPEC LanguageDesc
+struct LanguageDesc
 {
     Language lang_id;
     uint32   spell_id;
@@ -461,7 +466,7 @@ struct MANGOS_DLL_SPEC LanguageDesc
 };
 
 extern LanguageDesc lang_description[LANGUAGES_COUNT];
-MANGOS_DLL_SPEC LanguageDesc const* GetLanguageDescByID(uint32 lang);
+LanguageDesc const* GetLanguageDescByID(uint32 lang);
 
 class PlayerDumpReader;
 
@@ -514,6 +519,8 @@ class ObjectMgr
         Group* GetGroupById(uint32 id) const;
         void AddGroup(Group* group);
         void RemoveGroup(Group* group);
+        GroupMap::iterator GetGroupMapBegin() { return mGroupMap.begin(); }
+        GroupMap::iterator GetGroupMapEnd() { return mGroupMap.end(); }
 
         ArenaTeam* GetArenaTeamById(uint32 arenateamid) const;
         ArenaTeam* GetArenaTeamByName(const std::string& arenateamname) const;
@@ -551,9 +558,9 @@ class ObjectMgr
         uint32 GetPlayerAccountIdByGUID(ObjectGuid guid) const;
         uint32 GetPlayerAccountIdByPlayerName(const std::string& name) const;
 
-        uint32 GetNearestTaxiNode(float x, float y, float z, uint32 mapid, Team team);
-        void GetTaxiPath(uint32 source, uint32 destination, uint32& path, uint32& cost);
-        uint32 GetTaxiMountDisplayId(uint32 id, Team team, bool allowed_alt_team = false);
+        uint32 GetNearestTaxiNode(float x, float y, float z, uint32 mapid, Team team) const;
+        void GetTaxiPath(uint32 source, uint32 destination, uint32& path, uint32& cost) const;
+        uint32 GetTaxiMountDisplayId(uint32 id, Team team, bool allowed_alt_team = false) const;
 
         Quest const* GetQuestTemplate(uint32 quest_id) const
         {
@@ -723,7 +730,6 @@ class ObjectMgr
         void LoadQuestPOI();
 
         void LoadNPCSpellClickSpells();
-        void LoadSpellTemplate();
         void LoadCreatureTemplateSpells();
 
         void LoadGameTele();
@@ -732,10 +738,13 @@ class ObjectMgr
 
         void LoadGossipMenus();
 
+        void LoadDungeonEncounters();
+
         void LoadVendorTemplates();
         void LoadVendors() { LoadVendors("npc_vendor", false); }
         void LoadTrainerTemplates();
         void LoadTrainers() { LoadTrainers("npc_trainer", false); }
+        void LoadSpellTemplate();
 
         /// @param _map Map* of the map for which to load active entities. If nullptr active entities on continents are loaded
         void LoadActiveEntities(Map* _map);
@@ -1249,12 +1258,12 @@ class ObjectMgr
 #define sObjectMgr MaNGOS::Singleton<ObjectMgr>::Instance()
 
 /// generic text function
-MANGOS_DLL_SPEC bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target = nullptr);
+bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target = nullptr);
 
 // scripting access functions
-MANGOS_DLL_SPEC bool LoadMangosStrings(DatabaseType& db, char const* table, int32 start_value = MAX_CREATURE_AI_TEXT_STRING_ID, int32 end_value = std::numeric_limits<int32>::min(), bool extra_content = false);
-MANGOS_DLL_SPEC CreatureInfo const* GetCreatureTemplateStore(uint32 entry);
-MANGOS_DLL_SPEC Quest const* GetQuestTemplateStore(uint32 entry);
-MANGOS_DLL_SPEC MangosStringLocale const* GetMangosStringData(int32 entry);
+bool LoadMangosStrings(DatabaseType& db, char const* table, int32 start_value = MAX_CREATURE_AI_TEXT_STRING_ID, int32 end_value = std::numeric_limits<int32>::min(), bool extra_content = false);
+CreatureInfo const* GetCreatureTemplateStore(uint32 entry);
+Quest const* GetQuestTemplateStore(uint32 entry);
+MangosStringLocale const* GetMangosStringData(int32 entry);
 
 #endif

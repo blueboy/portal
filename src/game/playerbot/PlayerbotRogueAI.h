@@ -67,7 +67,7 @@ enum RogueSpells
 };
 //class Player;
 
-class MANGOS_DLL_SPEC PlayerbotRogueAI : PlayerbotClassAI
+class PlayerbotRogueAI : PlayerbotClassAI
 {
 public:
     PlayerbotRogueAI(Player * const master, Player * const bot, PlayerbotAI * const ai);
