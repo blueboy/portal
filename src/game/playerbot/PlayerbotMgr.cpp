@@ -1158,124 +1158,126 @@ uint32 Player::GetSpec()
 bool ChatHandler::HandlePlayerbotCommand(char* args)
 {
     if (!(m_session->GetSecurity() > SEC_PLAYER))
+    {
         if (botConfig.GetBoolDefault("PlayerbotAI.DisableBots", false))
         {
             PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
             SetSentErrorMessage(true);
             return false;
         }
+    }
 
-        if (!m_session)
-        {
-            PSendSysMessage("|cffff0000You may only add bots from an active session");
-            SetSentErrorMessage(true);
-            return false;
-        }
+    if (!m_session)
+    {
+        PSendSysMessage("|cffff0000You may only add bots from an active session");
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-        if (!*args)
-        {
-            PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
-            SetSentErrorMessage(true);
-            return false;
-        }
+    if (!*args)
+    {
+        PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-        char *cmd = strtok ((char *) args, " ");
-        char *charname = strtok (nullptr, " ");
-        if (!cmd || !charname)
-        {
-            PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
-            SetSentErrorMessage(true);
-            return false;
-        }
+    char *cmd = strtok ((char *) args, " ");
+    char *charname = strtok (nullptr, " ");
+    if (!cmd || !charname)
+    {
+        PSendSysMessage("|cffff0000usage: add PLAYERNAME  or  remove PLAYERNAME");
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-        std::string cmdStr = cmd;
-        std::string charnameStr = charname;
+    std::string cmdStr = cmd;
+    std::string charnameStr = charname;
 
-        if (!normalizePlayerName(charnameStr))
-            return false;
+    if (!normalizePlayerName(charnameStr))
+        return false;
 
-        ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(charnameStr.c_str());
-        if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
-        {
-            SendSysMessage(LANG_PLAYER_NOT_FOUND);
-            SetSentErrorMessage(true);
-            return false;
-        }
+    ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(charnameStr.c_str());
+    if (guid == ObjectGuid() || (guid == m_session->GetPlayer()->GetObjectGuid()))
+    {
+        SendSysMessage(LANG_PLAYER_NOT_FOUND);
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-        uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
-        if (accountId != m_session->GetAccountId())
-        {
-            PSendSysMessage("|cffff0000You may only add bots from the same account.");
-            SetSentErrorMessage(true);
-            return false;
-        }
+    uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    if (accountId != m_session->GetAccountId())
+    {
+        PSendSysMessage("|cffff0000You may only add bots from the same account.");
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-        // create the playerbot manager if it doesn't already exist
-        PlayerbotMgr* mgr = m_session->GetPlayer()->GetPlayerbotMgr();
-        if (!mgr)
-        {
-            mgr = new PlayerbotMgr(m_session->GetPlayer());
-            m_session->GetPlayer()->SetPlayerbotMgr(mgr);
-        }
+    // create the playerbot manager if it doesn't already exist
+    PlayerbotMgr* mgr = m_session->GetPlayer()->GetPlayerbotMgr();
+    if (!mgr)
+    {
+        mgr = new PlayerbotMgr(m_session->GetPlayer());
+        m_session->GetPlayer()->SetPlayerbotMgr(mgr);
+    }
 
-        QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
-        if (resultchar)
-        {
-            Field *fields = resultchar->Fetch();
-            int acctcharcount = fields[0].GetUInt32();
-            int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
-            if (!(m_session->GetSecurity() > SEC_PLAYER))
-                if (acctcharcount > maxnum && (cmdStr == "add" || cmdStr == "login"))
-                {
-                    PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
-                    SetSentErrorMessage(true);
-                    delete resultchar;
-                    return false;
-                }
+    QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
+    if (resultchar)
+    {
+        Field *fields = resultchar->Fetch();
+        int acctcharcount = fields[0].GetUInt32();
+        int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
+        if (!(m_session->GetSecurity() > SEC_PLAYER))
+            if (acctcharcount > maxnum && (cmdStr == "add" || cmdStr == "login"))
+            {
+                PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)", maxnum);
+                SetSentErrorMessage(true);
                 delete resultchar;
-        }
+                return false;
+            }
+            delete resultchar;
+    }
 
-        QueryResult *resultlvl = CharacterDatabase.PQuery("SELECT level,name FROM characters WHERE guid = '%u'", guid.GetCounter());
-        if (resultlvl)
-        {
-            Field *fields = resultlvl->Fetch();
-            int charlvl = fields[0].GetUInt32();
-            int maxlvl = botConfig.GetIntDefault("PlayerbotAI.RestrictBotLevel", 80);
-            if (!(m_session->GetSecurity() > SEC_PLAYER))
-                if (charlvl > maxlvl)
-                {
-                    PSendSysMessage("|cffff0000You cannot summon |cffffffff[%s]|cffff0000, it's level is too high.(Current Max:lvl |cffffffff%u)", fields[1].GetString(), maxlvl);
-                    SetSentErrorMessage(true);
-                    delete resultlvl;
-                    return false;
-                }
+    QueryResult *resultlvl = CharacterDatabase.PQuery("SELECT level,name FROM characters WHERE guid = '%u'", guid.GetCounter());
+    if (resultlvl)
+    {
+        Field *fields = resultlvl->Fetch();
+        int charlvl = fields[0].GetUInt32();
+        int maxlvl = botConfig.GetIntDefault("PlayerbotAI.RestrictBotLevel", 80);
+        if (!(m_session->GetSecurity() > SEC_PLAYER))
+            if (charlvl > maxlvl)
+            {
+                PSendSysMessage("|cffff0000You cannot summon |cffffffff[%s]|cffff0000, it's level is too high.(Current Max:lvl |cffffffff%u)", fields[1].GetString(), maxlvl);
+                SetSentErrorMessage(true);
                 delete resultlvl;
-        }
-        // end of gmconfig patch
-        if (cmdStr == "add" || cmdStr == "login")
-        {
-            if (mgr->GetPlayerBot(guid))
-            {
-                PSendSysMessage("Bot already exists in world.");
-                SetSentErrorMessage(true);
                 return false;
             }
-            CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
-            mgr->LoginPlayerBot(guid);
-            PSendSysMessage("Bot added successfully.");
-        }
-        else if (cmdStr == "remove" || cmdStr == "logout")
+            delete resultlvl;
+    }
+    // end of gmconfig patch
+    if (cmdStr == "add" || cmdStr == "login")
+    {
+        if (mgr->GetPlayerBot(guid))
         {
-            if (!mgr->GetPlayerBot(guid))
-            {
-                PSendSysMessage("|cffff0000Bot can not be removed because bot does not exist in world.");
-                SetSentErrorMessage(true);
-                return false;
-            }
-            CharacterDatabase.DirectPExecute("UPDATE characters SET online = 0 WHERE guid = '%u'", guid.GetCounter());
-            mgr->LogoutPlayerBot(guid);
-            PSendSysMessage("Bot removed successfully.");
+            PSendSysMessage("Bot already exists in world.");
+            SetSentErrorMessage(true);
+            return false;
         }
+        CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
+        mgr->LoginPlayerBot(guid);
+        PSendSysMessage("Bot added successfully.");
+    }
+    else if (cmdStr == "remove" || cmdStr == "logout")
+    {
+        if (!mgr->GetPlayerBot(guid))
+        {
+            PSendSysMessage("|cffff0000Bot can not be removed because bot does not exist in world.");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        CharacterDatabase.DirectPExecute("UPDATE characters SET online = 0 WHERE guid = '%u'", guid.GetCounter());
+        mgr->LogoutPlayerBot(guid);
+        PSendSysMessage("Bot removed successfully.");
+    }
 
-        return true;
+    return true;
 }
