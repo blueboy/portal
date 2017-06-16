@@ -328,7 +328,6 @@ bool WorldSession::Update(PacketFilter& updater)
                 botPlayer->GetPlayerbotAI()->HandleTeleportAck();
             else if (botPlayer->IsInWorld())
             {
-                std::lock_guard<std::mutex> botguard(pBotWorldSession->m_recvQueueLock);
                 while(!pBotWorldSession->m_recvQueue.empty())
                 {
                     auto const botpacket = std::move(pBotWorldSession->m_recvQueue.front());
