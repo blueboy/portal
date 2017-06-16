@@ -950,13 +950,18 @@ void Creature::LoadBotMenu(Player *pPlayer)
     ObjectGuid guid = pPlayer->GetObjectGuid();
     uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
     std::string fromTable = "characters c";
-    std::string wherestr = "AND (c.guid<>";
+    std::string wherestr = "AND c.guid<>";
     if (botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
     {
-        fromTable = "characters c, character_social s";
-        wherestr = "OR (c.guid=s.guid AND flags & 1 AND s.note " _LIKE_ " " _CONCAT3_ ("'%%'","'shared'","'%%'")" AND s.friend=";
+        fromTable = "characters c LEFT JOIN character_social s ON c.guid=s.guid";
+        wherestr = "AND s.friend IS NULL) OR (s.flags & 1 AND s.note " _LIKE_ " " _CONCAT3_("'%%'", "'shared'", "'%%'")" AND s.friend=";
     }
-    QueryResult *result = CharacterDatabase.PQuery("SELECT DISTINCT c.guid, c.name, c.online FROM %s WHERE c.account='%d' %s'%u')", fromTable.c_str(), accountId, wherestr.c_str(), guid);
+    QueryResult *result = CharacterDatabase.PQuery("SELECT DISTINCT c.guid, c.name, c.online, c.race, c.class, c.map FROM %s WHERE (c.account='%d' %s'%u')", fromTable.c_str(), accountId, wherestr.c_str(), guid);
+    if (!result)
+    {
+        delete result;
+        return;
+    }
     do
     {
         Field *fields = result->Fetch();

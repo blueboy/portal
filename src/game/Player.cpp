@@ -13170,7 +13170,7 @@ void Player::OnGossipSelect(WorldObject* pSource, uint32 gossipListId, uint32 me
 
                 // check if this bot is allowed for player from other account
                 // placed here to prevent packet cheating
-                uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+                uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, guidlo));
                 if (accountId != m_session->GetAccountId())
                 {
                     if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
