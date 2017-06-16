@@ -13,6 +13,11 @@ ConfVersion=2012021401
 #        Default: 0 - off
 #                 1 - on
 #
+#    PlayerbotAI.SharedBots
+#        Allow bots to be shared from other accounts
+#        Default: 0 - off
+#                 1 - on
+#
 #    PlayerbotAI.DebugWhisper
 #        Enable debug output by whispering master
 #        Default: 0 - off
@@ -74,6 +79,7 @@ ConfVersion=2012021401
 ###################################################################################################################
 
 PlayerbotAI.DisableBots = 0
+PlayerbotAI.SharedBots = 0
 PlayerbotAI.DebugWhisper = 0
 PlayerbotAI.FollowDistanceMin = 0.5
 PlayerbotAI.FollowDistanceMax = 1.0

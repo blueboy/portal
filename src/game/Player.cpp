@@ -13157,21 +13157,41 @@ void Player::OnGossipSelect(WorldObject* pSource, uint32 gossipListId, uint32 me
             }
             else if(GetPlayerbotMgr()->GetPlayerBot(ObjectGuid(HIGHGUID_PLAYER,guidlo)) == nullptr)
             {
-                QueryResult *resultchar = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE online = '1' AND account = '%u'", m_session->GetAccountId());
-                if(resultchar)
+                if(!(m_session->GetSecurity() > SEC_PLAYER))
                 {
-                    Field *fields = resultchar->Fetch();
                     int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
-                    int acctcharcount = fields[0].GetUInt32();
-                    if(!(m_session->GetSecurity() > SEC_PLAYER))
-                        if(acctcharcount > maxnum)
-                        {
-                            ChatHandler(this).PSendSysMessage("|cffff0000You cannot summon anymore bots. (Current Max: |cffffffff%u|cffff0000)",maxnum);
-                            delete resultchar;
-                            return;
-                        }
+                    int charcount = GetPlayerbotMgr()->GetBotCount();
+                    if(charcount >= maxnum)
+                    {
+                        ChatHandler(this).PSendSysMessage("|cffff0000You cannot summon anymore bots.(Current Max: |cffffffff%u)",maxnum);
+                        break;
+                    }
                 }
-                delete resultchar;
+
+                // check if this bot is allowed for player from other account
+                // placed here to prevent packet cheating
+                uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+                if (accountId != m_session->GetAccountId())
+                {
+                    if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
+                    {
+                        ChatHandler(this).PSendSysMessage("|cffff0000You may only add bots from the same account.");
+                        break;
+                    }
+
+                    QueryResult *resultsocial = CharacterDatabase.PQuery("SELECT COUNT(*) FROM character_social s, characters c WHERE s.guid=c.guid AND c.online = 0 AND flags & 1 AND s.note " _LIKE_ " " _CONCAT3_ ("'%%'","'shared'","'%%'")" AND s.friend = '%u' AND s.guid = '%u'", m_session->GetPlayer()->GetGUIDLow(), guidlo);
+                    if (resultsocial)
+                    {
+                        Field *fields = resultsocial->Fetch();
+                        if (fields[0].GetUInt32() == 0)
+                        {
+                            ChatHandler(this).PSendSysMessage("|cffff0000You may only add bots from the same account or a friend's character that contains 'shared' in the notes on their friend list while not online.");
+                            delete resultsocial;
+                            break;
+                        }
+                    }
+                    delete resultsocial;
+                }
 
                 QueryResult *resultlvl = CharacterDatabase.PQuery("SELECT level,name FROM characters WHERE guid = '%u'", guidlo);
                 if(resultlvl)
