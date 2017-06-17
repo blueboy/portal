@@ -10,6 +10,7 @@
 #include "../Language.h"
 #include "../WaypointMovementGenerator.h"
 #include "../Guild.h"
+#include "../World.h"
 #include "../LootMgr.h"
 #include "../AccountMgr.h"
 
@@ -969,14 +970,24 @@ void Creature::LoadBotMenu(Player *pPlayer)
         std::string name = fields[1].GetString();
         uint8 online = fields[2].GetUInt8();
         std::string word = "";
+        uint8 race = fields[3].GetUInt8();
+        uint8 charclass = fields[4].GetUInt8();
+        uint32 mapid = fields[5].GetUInt32();
+        uint32 team = 0;
 
-        if ((guid == ObjectGuid()) || (guid == guidlo))
+        team = Player::TeamForRace(race);
+
+        if ((guid == ObjectGuid()) || (guid == guidlo) ||
+            (!sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP) && pPlayer->GetTeam() != team))
         {
-            //not found or himself
+            //not found or himself or not do not load opposing side
+        }
+        else if (charclass == CLASS_DEATH_KNIGHT && mapid == 609 && pPlayer->GetMapId() != 609)
+        {
+            // do not load death knight if is in death knight starting area
         }
         else
         {
-            // if(sConfig.GetBoolDefault("PlayerbotAI.DisableBots", false)) return;
             // create the manager if it doesn't already exist
             if (!pPlayer->GetPlayerbotMgr())
                 pPlayer->SetPlayerbotMgr(new PlayerbotMgr(pPlayer));
