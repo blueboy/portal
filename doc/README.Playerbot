@@ -233,6 +233,22 @@ in its bags or be equipped and even be soulbound. Using this you can cast spells
 on soulbound items ('nt' stands for 'not trading').
 /w BOTNAME nt [Enchantable Soulbound Item]
 
+Sharing bots across accounts:
+=============================
+
+  It is possible to a load a bot from another account. This must be done by a
+  player from a second account adding the master player to their friend's list
+  and set a note with the keyword 'shared' on that player. After it is setup
+  the bot can be added using either the botguy menu or the .bot add command if
+  enabled.
+
+  Example:
+    Frank and Bob are characters owned by different accounts. Bob would like to
+    use Frank as a playerbot. Frank must add Bob as a friend then right click
+    on Bob in the friend's list, click Set Note, then type 'shared'. Frank
+    would not be able to use Bob as a playerbot until Bob setup Frank as above.
+
+
 More Information:
 =================
 
