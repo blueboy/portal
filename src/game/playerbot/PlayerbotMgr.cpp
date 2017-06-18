@@ -955,7 +955,7 @@ void Creature::LoadBotMenu(Player *pPlayer)
     if (botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
     {
         fromTable = "characters c LEFT JOIN character_social s ON c.guid=s.guid";
-        wherestr = "AND s.friend IS NULL) OR (s.flags & 1 AND s.note " _LIKE_ " " _CONCAT3_("'%%'", "'shared'", "'%%'")" AND s.friend=";
+        wherestr = "AND (s.friend IS NULL OR c.guid<>s.friend)) OR (s.flags & 1 AND s.note " _LIKE_ " " _CONCAT3_("'%%'", "'shared'", "'%%'")" AND s.friend=";
     }
     QueryResult *result = CharacterDatabase.PQuery("SELECT DISTINCT c.guid, c.name, c.online, c.race, c.class, c.map FROM %s WHERE (c.account='%d' %s'%u')", fromTable.c_str(), accountId, wherestr.c_str(), guid);
     if (!result)
