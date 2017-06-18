@@ -1283,14 +1283,6 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
         delete resultsocial;
     }
 
-    // create the playerbot manager if it doesn't already exist
-    PlayerbotMgr* mgr = m_session->GetPlayer()->GetPlayerbotMgr();
-    if (!mgr)
-    {
-        mgr = new PlayerbotMgr(m_session->GetPlayer());
-        m_session->GetPlayer()->SetPlayerbotMgr(mgr);
-    }
-
     if (!(m_session->GetSecurity() > SEC_PLAYER))
     {
         int maxnum = botConfig.GetIntDefault("PlayerbotAI.MaxNumBots", 9);
