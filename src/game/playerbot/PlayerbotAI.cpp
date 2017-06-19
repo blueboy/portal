@@ -1893,78 +1893,6 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             return;
         }
 
-        // if a change in speed was detected for the master
-        // make sure we have the same mount status
-    case SMSG_FORCE_RUN_SPEED_CHANGE:
-        {
-            WorldPacket p(packet);
-            ObjectGuid guid;
-
-            p >> guid.ReadAsPacked();
-            if (guid != GetMaster()->GetObjectGuid())
-                return;
-            if (GetMaster()->IsMounted() && !m_bot->IsMounted())
-            {
-                //Player Part
-                if (!GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).empty())
-                {
-                    int32 master_speed1 = 0;
-                    int32 master_speed2 = 0;
-                    master_speed1 = GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).front()->GetSpellProto()->EffectBasePoints[1];
-                    master_speed2 = GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).front()->GetSpellProto()->EffectBasePoints[2];
-
-                    //Bot Part
-                    uint32 spellMount = 0;
-                    for (PlayerSpellMap::iterator itr = m_bot->GetSpellMap().begin(); itr != m_bot->GetSpellMap().end(); ++itr)
-                    {
-                        uint32 spellId = itr->first;
-                        if (itr->second.state == PLAYERSPELL_REMOVED || itr->second.disabled || IsPassiveSpell(spellId))
-                            continue;
-                        const SpellEntry* pSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
-                        if (!pSpellInfo)
-                            continue;
-
-                        if (pSpellInfo->EffectApplyAuraName[0] == SPELL_AURA_MOUNTED)
-                        {
-                            if (pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                            {
-                                if (pSpellInfo->EffectBasePoints[1] == master_speed1)
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                            }
-                            else if ((pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                                && (pSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
-                            {
-                                if ((pSpellInfo->EffectBasePoints[1] == master_speed1)
-                                    && (pSpellInfo->EffectBasePoints[2] == master_speed2))
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                            }
-                            else if ((pSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                                && (pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
-                                if ((pSpellInfo->EffectBasePoints[2] == master_speed2)
-                                    && (pSpellInfo->EffectBasePoints[1] == master_speed1))
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                        }
-                    }
-                    if (spellMount > 0) m_bot->CastSpell(m_bot, spellMount, TRIGGERED_NONE);
-                }
-            }
-            else if (!GetMaster()->IsMounted() && m_bot->IsMounted())
-            {
-                WorldPacket emptyPacket;
-                m_bot->GetSession()->HandleCancelMountAuraOpcode(emptyPacket);  //updated code
-            }
-            return;
-        }
-
         // handle flying acknowledgement
     case SMSG_MOVE_SET_CAN_FLY:
         {
@@ -2291,7 +2219,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             p >> castItemGuid.ReadAsPacked();
             ObjectGuid casterGuid;
             p >> casterGuid.ReadAsPacked();
-            if (casterGuid != m_bot->GetObjectGuid())
+            if (casterGuid != m_bot->GetObjectGuid() && casterGuid != GetMaster()->GetObjectGuid())
                 return;
 
             uint8 castCount;
@@ -2302,6 +2230,80 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             p >> castFlags;
             uint32 msTime;
             p >> msTime;
+
+            if (casterGuid == GetMaster()->GetObjectGuid()) // listen for master's spells
+            {
+                const SpellEntry* const pSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+                if (!pSpellInfo)
+                    return;
+
+                //check for specific aura effect
+                switch (pSpellInfo->EffectApplyAuraName[0])
+                {
+                    case SPELL_AURA_MOUNTED:
+                    {
+                        //gather speed information
+                        int32 effect_speed1 = 0;
+                        int32 effect_speed2 = 0;
+                        effect_speed1 = pSpellInfo->EffectBasePoints[1];
+                        effect_speed2 = pSpellInfo->EffectBasePoints[2];
+
+                        //Bot Part
+                        //parse through known bot spells
+                        uint32 spellMount = 0;
+                        for (PlayerSpellMap::iterator itr = m_bot->GetSpellMap().begin(); itr != m_bot->GetSpellMap().end(); ++itr)
+                        {
+                            uint32 bspellId = itr->first;
+                            if (itr->second.state == PLAYERSPELL_REMOVED || itr->second.disabled || IsPassiveSpell(bspellId))
+                                continue;
+
+                            //exact match found, just use it.
+                            if (bspellId == spellId)
+                            {
+                                spellMount = spellId;
+                                break;
+                            }
+
+                            const SpellEntry* bSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(bspellId);
+                            if (!bSpellInfo)
+                                continue;
+
+                            if (bSpellInfo->EffectApplyAuraName[0] == SPELL_AURA_MOUNTED)
+                            {
+                                if (bSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
+                                {
+                                    if (bSpellInfo->EffectBasePoints[1] == effect_speed1)
+                                    {
+                                        spellMount = bspellId;
+                                        break;
+                                    }
+                                }
+                                else if ((bSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
+                                    && (bSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
+                                {
+                                    if ((bSpellInfo->EffectBasePoints[1] == effect_speed1)
+                                        && (bSpellInfo->EffectBasePoints[2] == effect_speed2))
+                                    {
+                                        spellMount = bspellId;
+                                        break;
+                                    }
+                                }
+                                else if ((bSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
+                                    && (bSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
+                                    if ((bSpellInfo->EffectBasePoints[2] == effect_speed2)
+                                        && (bSpellInfo->EffectBasePoints[1] == effect_speed1))
+                                    {
+                                        spellMount = bspellId;
+                                        break;
+                                    }
+                            }
+                        }
+                        if (spellMount > 0) m_bot->CastSpell(m_bot, spellMount, TRIGGERED_NONE);
+                    }
+                    default:
+                        break;
+                }
+            }
 
             return;
         }
