@@ -952,7 +952,7 @@ void Creature::LoadBotMenu(Player *pPlayer)
     uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
     std::string fromTable = "characters c";
     std::string wherestr = "AND c.guid<>";
-    if (botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
+    if (botConfig.GetBoolDefault("PlayerbotAI.SharedBots", false))
     {
         fromTable = "characters c LEFT JOIN character_social s ON c.guid=s.guid";
         wherestr = "AND (s.friend IS NULL OR c.guid<>s.friend)) OR (s.flags & 1 AND s.note " _LIKE_ " " _CONCAT3_("'%%'", "'shared'", "'%%'")" AND s.friend=";
@@ -1261,7 +1261,7 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
     bot_security = accountId ? sAccountMgr.GetSecurity(accountId) : SEC_PLAYER;
     if (accountId != m_session->GetAccountId() && !(m_session->GetSecurity() > bot_security))
     {
-        if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
+        if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", false))
         {
             PSendSysMessage("|cffff0000You may only add bots from the same account.");
             SetSentErrorMessage(true);

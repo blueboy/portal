@@ -13177,7 +13177,7 @@ void Player::OnGossipSelect(WorldObject* pSource, uint32 gossipListId, uint32 me
                 uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, guidlo));
                 if (accountId != m_session->GetAccountId())
                 {
-                    if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", true))
+                    if (!botConfig.GetBoolDefault("PlayerbotAI.SharedBots", false))
                     {
                         ChatHandler(this).PSendSysMessage("|cffff0000You may only add bots from the same account.");
                         break;
