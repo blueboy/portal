@@ -5,9 +5,9 @@
 #include "AI/ScriptDevAI/include/precompiled.h"
 #include "system.h"
 #include "ProgressBar.h"
-#include "ObjectMgr.h"
+#include "Globals/ObjectMgr.h"
 #include "Database/DatabaseEnv.h"
-#include "WaypointManager.h"
+#include "MotionGenerators/WaypointManager.h"
 
 std::string  strSD2Version;
 
@@ -42,7 +42,7 @@ void SystemMgr::LoadVersion()
         strSD2Version.append("ScriptDev2 ");
 
     outstring_log("Loading %s", strSD2Version.c_str());
-    outstring_log("");
+    outstring_log();
 }
 
 void SystemMgr::LoadScriptTexts()
@@ -111,14 +111,14 @@ void SystemMgr::LoadScriptWaypoints()
 
         delete pResult;
 
-        outstring_log("");
+        outstring_log();
         outstring_log(">> Loaded %u Script Waypoint nodes.", uiNodeCount);
     }
     else
     {
         BarGoLink bar(1);
         bar.step();
-        outstring_log("");
+        outstring_log();
         outstring_log(">> Loaded 0 Script Waypoints. DB table `script_waypoint` is empty.");
     }
 }
