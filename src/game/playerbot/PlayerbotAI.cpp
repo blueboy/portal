@@ -1790,6 +1790,8 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 
             if (result != SPELL_CAST_OK)
             {
+                if (GetManager()->m_confDebugWhisper)
+                    TellMaster("Cast of %s failed (reason: %u)", spellInfo->SpellName[0], result);
                 switch (result)
                 {
                 case SPELL_FAILED_INTERRUPTED:  // 40
