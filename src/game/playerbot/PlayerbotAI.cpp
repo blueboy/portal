@@ -1774,7 +1774,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             }
         }
 
-    case SMSG_CAST_FAILED:
+    case SMSG_CAST_RESULT:
         {
             WorldPacket p(packet);
             uint8 castCount;
