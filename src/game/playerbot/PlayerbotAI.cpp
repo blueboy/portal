@@ -5248,6 +5248,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId)
     if (m_bot->HasSpellCooldown(spellId))
         return false;
 
+    uint8 unk_flags = 0;
+
     // see Creature.cpp 1738 for reference
     // don't allow bot to cast damage spells on friends
     const SpellEntry* const pSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
@@ -5260,14 +5262,22 @@ bool PlayerbotAI::CastSpell(uint32 spellId)
     // set target
     ObjectGuid targetGUID = m_bot->GetSelectionGuid();
     Unit* pTarget = ObjectAccessor::GetUnit(*m_bot, targetGUID);
+    uint32 target_type = TARGET_FLAG_UNIT;
 
     if (!pTarget)
+    {
+        targetGUID = m_bot->GetObjectGuid();
         pTarget = m_bot;
+        target_type = TARGET_FLAG_SELF;
+    }
 
     if (IsPositiveSpell(spellId))
     {
         if (pTarget && !m_bot->IsFriendlyTo(pTarget))
+        {
+            targetGUID = m_bot->GetObjectGuid();
             pTarget = m_bot;
+        }
     }
     else
     {
@@ -5288,65 +5298,43 @@ bool PlayerbotAI::CastSpell(uint32 spellId)
         m_bot->StopMoving();
     }
 
-    uint32 target_type = TARGET_FLAG_UNIT;
-
     if (pSpellInfo->Effect[0] == SPELL_EFFECT_OPEN_LOCK)
-        target_type = TARGET_FLAG_OBJECT;
-
-    m_CurrentlyCastingSpellId = spellId;
-
-    if (pSpellInfo->Effect[0] == SPELL_EFFECT_OPEN_LOCK ||
-        pSpellInfo->Effect[0] == SPELL_EFFECT_SKINNING)
     {
+        target_type = TARGET_FLAG_OBJECT;
         if (m_lootCurrent)
-        {
-            if (!CheckBotCast(pSpellInfo))
-                return false;
-
-            WorldPacket* const packet = new WorldPacket(CMSG_CAST_SPELL, 1 + 4 + 1 + 4 + 8);
-            *packet << uint8(0);                            // spells cast count;
-            *packet << spellId;
-            *packet << uint8(0);                            // unk_flags
-            *packet << uint32(target_type);
-            *packet << m_lootCurrent.WriteAsPacked();
-            m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
-
-            if (target_type == TARGET_FLAG_OBJECT)
-            {
-                WorldPacket* const packetgouse = new WorldPacket(CMSG_GAMEOBJ_REPORT_USE, 8);
-                *packetgouse << m_lootCurrent;
-                m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packetgouse))); // queue the packet to get around race condition
-
-                GameObject *obj = m_bot->GetMap()->GetGameObject(m_lootCurrent);
-                if (!obj)
-                    return false;
-
-                // add other go types here, i.e.:
-                // GAMEOBJECT_TYPE_CHEST - loot quest items of chest
-                if (obj->GetGoType() == GAMEOBJECT_TYPE_QUESTGIVER)
-                {
-                    TurnInQuests(obj);
-
-                    // auto accept every available quest this NPC has
-                    m_bot->PrepareQuestMenu(m_lootCurrent);
-                    QuestMenu& questMenu = m_bot->PlayerTalkClass->GetQuestMenu();
-                    for (uint32 iI = 0; iI < questMenu.MenuItemCount(); ++iI)
-                    {
-                        QuestMenuItem const& qItem = questMenu.GetItem(iI);
-                        uint32 questID = qItem.m_qId;
-                        if (!AddQuest(questID, obj))
-                            TellMaster("Couldn't take quest");
-                    }
-                    m_lootCurrent = ObjectGuid();
-                    m_bot->GetMotionMaster()->Clear(false);
-                    m_bot->GetMotionMaster()->MoveIdle();
-                }
-            }
-        }
+            targetGUID = m_lootCurrent;
         else
             return false;
     }
-    else
+    else if (pSpellInfo->Effect[0] == SPELL_EFFECT_SKINNING)
+    {
+        target_type = TARGET_FLAG_UNIT;
+        if (m_lootCurrent)
+            targetGUID = m_lootCurrent;
+        else
+            return false;
+    }
+
+    m_CurrentlyCastingSpellId = spellId;
+
+    if (!CheckBotCast(pSpellInfo))
+        return false;
+
+    // Power check (stolen from: CreatureAI.cpp - CreatureAI::CanCastSpell)
+    if (m_bot->GetPower((Powers)pSpellInfo->powerType) < Spell::CalculatePowerCost(pSpellInfo, m_bot))
+        return false;
+
+    WorldPacket* const packet = new WorldPacket(CMSG_CAST_SPELL, 1 + 4 + 1 + 4 + 8);
+    *packet << uint8(0);                            // spells cast count;
+    *packet << spellId;
+    *packet << unk_flags;                           // unk_flags
+    *packet << uint32(target_type);
+
+    if (target_type == TARGET_FLAG_SELF)
+    {
+        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+    }
+    else if (target_type & (TARGET_FLAG_UNIT | TARGET_FLAG_UNK2))
     {
         // Check spell range
         if (!In_Range(pTarget, spellId))
@@ -5356,14 +5344,42 @@ bool PlayerbotAI::CastSpell(uint32 spellId)
         if (!m_bot->IsWithinLOSInMap(pTarget))
             return false;
 
-        // Power check (stolen from: CreatureAI.cpp - CreatureAI::CanCastSpell)
-        if (m_bot->GetPower((Powers)pSpellInfo->powerType) < Spell::CalculatePowerCost(pSpellInfo, m_bot))
+        *packet << targetGUID.WriteAsPacked();
+        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+    }
+    else if (target_type & (TARGET_FLAG_OBJECT | TARGET_FLAG_GAMEOBJECT_ITEM))
+    {
+        *packet << targetGUID.WriteAsPacked();
+        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+
+        WorldPacket* const packetgouse = new WorldPacket(CMSG_GAMEOBJ_REPORT_USE, 8);
+        *packetgouse << m_lootCurrent;
+        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packetgouse))); // queue the packet to get around race condition
+
+        GameObject *obj = m_bot->GetMap()->GetGameObject(m_lootCurrent);
+        if (!obj)
             return false;
 
-        if (IsAutoRepeatRangedSpell(pSpellInfo))
-            m_bot->CastSpell(pTarget, pSpellInfo, TRIGGERED_OLD_TRIGGERED);       // cast triggered spell
-        else
-            m_bot->CastSpell(pTarget, pSpellInfo, TRIGGERED_NONE);      // uni-cast spell
+        // add other go types here, i.e.:
+        // GAMEOBJECT_TYPE_CHEST - loot quest items of chest
+        if (obj->GetGoType() == GAMEOBJECT_TYPE_QUESTGIVER)
+        {
+            TurnInQuests(obj);
+
+            // auto accept every available quest this NPC has
+            m_bot->PrepareQuestMenu(m_lootCurrent);
+            QuestMenu& questMenu = m_bot->PlayerTalkClass->GetQuestMenu();
+            for (uint32 iI = 0; iI < questMenu.MenuItemCount(); ++iI)
+            {
+                QuestMenuItem const& qItem = questMenu.GetItem(iI);
+                uint32 questID = qItem.m_qId;
+                if (!AddQuest(questID, obj))
+                    TellMaster("Couldn't take quest");
+            }
+            m_lootCurrent = ObjectGuid();
+            m_bot->GetMotionMaster()->Clear(false);
+            m_bot->GetMotionMaster()->MoveIdle();
+        }
     }
 
     SetIgnoreUpdateTime(CastTime + 1);
