@@ -392,6 +392,7 @@ Spell::Spell(Unit* caster, SpellEntry const* info, uint32 triggeredFlags, Object
     m_ignoreHitResult = !!(triggeredFlags & TRIGGERED_IGNORE_HIT_CALCULATION);
     m_ignoreUnselectableTarget = m_IsTriggeredSpell || (triggeredFlags & TRIGGERED_IGNORE_UNSELECTABLE_FLAG) != 0;
     m_ignoreUnattackableTarget = !!(triggeredFlags & TRIGGERED_IGNORE_UNATTACKABLE_FLAG);
+    m_triggerAutorepeat = !!(triggeredFlags & TRIGGERED_AUTOREPEAT);
 
     m_reflectable = IsReflectableSpell(m_spellInfo);
     m_spellFlags = SPELL_FLAG_NORMAL;
@@ -3171,7 +3172,8 @@ void Spell::Prepare()
     if (!m_IsTriggeredSpell)
     {
         // add to cast type slot
-        m_caster->SetCurrentCastedSpell(this);
+        if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING) && !m_triggerAutorepeat)
+            m_caster->SetCurrentCastedSpell(this);
 
         // will show cast bar
         SendSpellStart();
@@ -3179,7 +3181,7 @@ void Spell::Prepare()
         TriggerGlobalCooldown();
 
         // Execute instant spells immediate
-        if (m_timer == 0 && !IsNextMeleeSwingSpell() && !IsAutoRepeat() && !IsChanneledSpell(m_spellInfo))
+        if (m_timer == 0 && !IsNextMeleeSwingSpell() && (!IsAutoRepeat() || m_triggerAutorepeat) && !IsChanneledSpell(m_spellInfo))
             cast();
     }
     // execute triggered without cast time explicitly in call point
@@ -3196,7 +3198,7 @@ void Spell::cancel()
         return;
 
     // channeled spells don't display interrupted message even if they are interrupted, possible other cases with no "Interrupted" message
-    bool sendInterrupt = IsChanneledSpell(m_spellInfo) ? false : true;
+    bool sendInterrupt = (IsChanneledSpell(m_spellInfo) || m_autoRepeat) ? false : true;
 
     m_autoRepeat = false;
     switch (m_spellState)
@@ -3972,7 +3974,7 @@ void Spell::SendCastResult(Player* caster, SpellEntry const* spellInfo, uint8 ca
     if (result == SPELL_CAST_OK)
         return;
 
-    WorldPacket data(isPetCastResult ? SMSG_PET_CAST_FAILED : SMSG_CAST_FAILED, (4 + 1 + 2));
+    WorldPacket data(isPetCastResult ? SMSG_PET_CAST_FAILED : SMSG_CAST_RESULT, (4 + 1 + 2));
     data << uint8(cast_count);                              // single cast or multi 2.3 (0/1)
     data << uint32(spellInfo->Id);
     data << uint8(!IsPassiveSpell(spellInfo) ? result : SPELL_FAILED_DONT_REPORT); // do not report failed passive spells
