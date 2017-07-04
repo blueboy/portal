@@ -5459,7 +5459,8 @@ bool PlayerbotAI::Buff(uint32 spellId, Unit* target, void (*beforeCast)(Player *
         for (Unit::AuraList::const_iterator it = auras.begin(); it != auras.end() && !willBenefitFromSpell; ++it)
         {
             //DEBUG_LOG("...m_amount (%d) vs bonus (%d)", (*it)->GetModifier()->m_amount, bonus);
-            if ((*it)->GetModifier()->m_miscvalue == spellProto->EffectMiscValue[i])
+            if ((*it)->GetModifier()->m_miscvalue == spellProto->EffectMiscValue[i] &&
+                (*it)->GetSpellProto()->SpellIconID == spellProto->SpellIconID)
             {
                 hasComparableAura = true;
                 //DEBUG_LOG("...hasComparableAura");
