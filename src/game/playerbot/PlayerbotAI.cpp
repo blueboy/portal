@@ -8880,7 +8880,12 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
         {
             // TODO: make this only in response to direct whispers (chatting in party chat can in fact be between humans)
             std::string msg = "What is [";
-            msg += text.c_str();
+            std::string textsub;
+            if (text.length() > 10)
+                textsub = text.substr(0, 10) + "...";
+            else
+                textsub = text;
+            msg += textsub.c_str();
             msg += "]? For a list of commands, ask for 'help'.";
             SendWhisper(msg, fromPlayer);
             m_bot->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
