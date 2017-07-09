@@ -5473,6 +5473,10 @@ bool PlayerbotAI::Buff(uint32 spellId, Unit* target, void (*beforeCast)(Player *
         return false;
     //DEBUG_LOG("[PlayerbotAI::Buff] sSpellMgr.SelectAuraRankForLevel(spellProto, target->getLevel()) .... Success!");
 
+    // Target already has aura from spellId, skip for speed. May need to add exceptions
+    if (target->HasAura(spellId))
+        return false;
+
     //DEBUG_LOG("[PlayerbotAI::Buff] BEGIN Aura Check Loop!");
 
     // Loop through effects
@@ -5499,7 +5503,8 @@ bool PlayerbotAI::Buff(uint32 spellId, Unit* target, void (*beforeCast)(Player *
         for (Unit::AuraList::const_iterator it = auras.begin(); it != auras.end() && !hasEqualOrGreaterAuraEffect[i]; ++it)
         {
             //DEBUG_LOG("[PlayerbotAI::Buff] ---> INNER LOOP: %d (*it)->GetModifier()->m_miscvalue (%d) vs spellProto->EffectMiscValue[%d] (%d)", it, (*it)->GetModifier()->m_miscvalue, i, spellProto->EffectMiscValue[i]);
-            if ((*it)->GetModifier()->m_miscvalue == spellProto->EffectMiscValue[i])
+            if ((*it)->GetModifier()->m_miscvalue == spellProto->EffectMiscValue[i] &&
+                (*it)->GetSpellProto()->SpellIconID == spellProto->SpellIconID)
             {
                 //DEBUG_LOG("[PlayerbotAI::Buff] ---> INNER LOOP  m_amount (%d) vs bonus (%d)", (*it)->GetModifier()->m_amount, bonus);
                 if ((*it)->GetModifier()->m_amount >= bonus)
