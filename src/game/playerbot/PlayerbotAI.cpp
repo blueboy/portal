@@ -7254,7 +7254,10 @@ void PlayerbotAI::findNearbyCorpse()
         if (!corpse)
             continue;
 
-        if (!corpse->IsCorpse() || corpse->IsDespawned() || m_bot->IsFriendlyTo(corpse))
+        if (!corpse->IsCorpse() || corpse->IsDespawned() || m_bot->IsFriendlyTo(corpse) || !corpse->loot)
+            continue;
+
+        if (!corpse->loot->CanLoot(m_bot))
             continue;
 
         uint32 skillId = 0;
