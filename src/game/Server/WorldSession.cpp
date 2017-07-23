@@ -318,26 +318,23 @@ bool WorldSession::Update(PacketFilter& updater)
     // The PlayerbotAI class adds to the packet queue to simulate a real player
     // since Playerbots are known to the World obj only by its master's WorldSession object
     // we need to process all master's bot's packets.
-    if (GetPlayer() && GetPlayer()->GetPlayerbotMgr()) {
+    if (GetPlayer() && GetPlayer()->GetPlayerbotMgr())
+    {
         for (PlayerBotMap::const_iterator itr = GetPlayer()->GetPlayerbotMgr()->GetPlayerBotsBegin();
                 itr != GetPlayer()->GetPlayerbotMgr()->GetPlayerBotsEnd(); ++itr)
         {
             Player* const botPlayer = itr->second;
             WorldSession* const pBotWorldSession = botPlayer->GetSession();
-            if (botPlayer->IsBeingTeleported())
-                botPlayer->GetPlayerbotAI()->HandleTeleportAck();
-            else if (botPlayer->IsInWorld())
-            {
-                while(!pBotWorldSession->m_recvQueue.empty())
-                {
-                    auto const botpacket = std::move(pBotWorldSession->m_recvQueue.front());
-                    pBotWorldSession->m_recvQueue.pop_front();
 
-                    OpcodeHandler const& opHandle = opcodeTable[botpacket->GetOpcode()];
-                    pBotWorldSession->ExecuteOpcode(opHandle, *botpacket);
-                };
-                pBotWorldSession->m_recvQueue.clear();
+            while(!pBotWorldSession->m_recvQueue.empty())
+            {
+                auto const botpacket = std::move(pBotWorldSession->m_recvQueue.front());
+                pBotWorldSession->m_recvQueue.pop_front();
+
+                OpcodeHandler const& opHandle = opcodeTable[botpacket->GetOpcode()];
+                pBotWorldSession->ExecuteOpcode(opHandle, *botpacket);
             }
+            pBotWorldSession->m_recvQueue.clear();
         }
     }
 
