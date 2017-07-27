@@ -3828,7 +3828,7 @@ void PlayerbotAI::DoLoot()
             m_bot->GetMotionMaster()->MoveIdle();
             return;
         }
-        else if (c->loot && !c->loot->CanLoot(m_bot))
+        else if (c->loot && !c->loot->CanLoot(m_bot) && !c->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
         {
             if (GetManager()->m_confDebugWhisper)
                 TellMaster("%s is not lootable by me.", wo->GetName());
@@ -7346,7 +7346,7 @@ void PlayerbotAI::findNearbyCorpse()
         if (!corpse->IsCorpse() || corpse->IsDespawned() || m_bot->IsFriendlyTo(corpse) || !corpse->loot)
             continue;
 
-        if (!corpse->loot->CanLoot(m_bot))
+        if (!corpse->loot->CanLoot(m_bot) && !corpse->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
             continue;
 
         uint32 skillId = 0;
