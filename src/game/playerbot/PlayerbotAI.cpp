@@ -2364,7 +2364,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             uint8 items;
 
             p >> guid;      // 8 corpse guid
-            p >> loot_type; // 1 loot type
+            p >> loot_type; // 1 client loot type
             p >> gold;      // 4 gold
             p >> items;     // 1 items count
 
@@ -2398,8 +2398,8 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 
                 // skinning or collect loot flag = just auto loot everything for getting object
                 // corpse = run checks
-                if (loot_type == LOOT_SKINNING || HasCollectFlag(COLLECT_FLAG_LOOT) ||
-                    (loot_type == LOOT_CORPSE && (IsInQuestItemList(itemid) || IsItemUseful(itemid))))
+                if (loot_type == CLIENT_LOOT_PICKPOCKETING || HasCollectFlag(COLLECT_FLAG_LOOT) ||
+                    (loot_type == CLIENT_LOOT_CORPSE && (IsInQuestItemList(itemid) || IsItemUseful(itemid))))
                 {
                     ItemPosCountVec dest;
                     if (m_bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, itemcount) == EQUIP_ERR_INVENTORY_FULL)
