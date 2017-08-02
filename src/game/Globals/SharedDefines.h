@@ -86,8 +86,9 @@ enum Classes
     CLASS_SHAMAN        = 7,
     CLASS_MAGE          = 8,
     CLASS_WARLOCK       = 9,
-    // CLASS_UNK2       = 10,unused
+    // CLASS_MONK       = 10,                              // not listed in DBC, will be in 5.0
     CLASS_DRUID         = 11,
+    // CLASS_DEMON_HUNTER = 12,                            // not listed in DBC, will be in 7.0
 };
 
 // max+1 for player class
@@ -387,7 +388,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_CAN_PROC_WITH_TRIGGERED     = 0x04000000,// 26 auras with this attribute can proc from triggered spell casts
     SPELL_ATTR_EX3_DRAIN_SOUL                  = 0x08000000,// 27
     SPELL_ATTR_EX3_UNK28                       = 0x10000000,// 28 always cast ok ? (requires more research)
-    SPELL_ATTR_EX3_UNK29                       = 0x20000000,// 29 can only target ground targets (non fly non jump)
+    SPELL_ATTR_EX3_NO_DONE_BONUS               = 0x20000000,// 29
     SPELL_ATTR_EX3_DONT_DISPLAY_RANGE          = 0x40000000,// 30
     SPELL_ATTR_EX3_UNK31                       = 0x80000000,// 31
 };

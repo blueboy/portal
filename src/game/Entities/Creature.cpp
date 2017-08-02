@@ -656,7 +656,7 @@ void Creature::RegeneratePower()
     {
         case POWER_MANA:
             // Combat and any controlled creature
-            if (isInCombat() || GetCharmerOrOwnerGuid())
+            if (isInCombat() || GetMasterGuid())
             {
                 if (!IsUnderLastManaUseEffect())
                 {
@@ -714,7 +714,7 @@ void Creature::RegenerateHealth()
     uint32 addvalue;
 
     // Not only pet, but any controlled creature
-    if (GetCharmerOrOwnerGuid())
+    if (GetMasterGuid())
     {
         float HealthIncreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_HEALTH);
         float Spirit = GetStat(STAT_SPIRIT);
@@ -1074,7 +1074,7 @@ void Creature::SetLootRecipient(Unit* unit)
         return;
     }
 
-    Player* player = unit->GetCharmerOrOwnerPlayerOrPlayerItself();
+    Player* player = unit->GetBeneficiaryPlayer();
     if (!player)                                            // normal creature, no player involved
         return;
 
@@ -1906,7 +1906,7 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
         return false;
 
     // only free creature
-    if (GetCharmerOrOwnerGuid())
+    if (GetMasterGuid())
         return false;
 
     // only from same creature faction
@@ -2116,7 +2116,7 @@ void Creature::SetInCombatWithZone()
     }
 }
 
-bool Creature::MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* pSpellInfo, uint32 selectFlags) const
+bool Creature::MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* pSpellInfo, uint32 selectFlags, SelectAttackingTargetParams params) const
 {
     if (selectFlags)
     {
@@ -2143,6 +2143,13 @@ bool Creature::MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* 
 
         if ((selectFlags & SELECT_FLAG_IN_LOS) && !IsWithinLOSInMap(pTarget))
             return false;
+
+        if ((selectFlags & SELECT_FLAG_RANGE_RANGE))
+        {
+            float dist = GetCombatDistance(pTarget, false);
+            if (dist > params.range.maxRange || dist < params.range.minRange)
+                return false;
+        }
     }
 
     if (pSpellInfo)
@@ -2182,12 +2189,12 @@ bool Creature::MeetsSelectAttackingRequirement(Unit* pTarget, SpellEntry const* 
     return true;
 }
 
-Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, uint32 uiSpellEntry, uint32 selectFlags) const
+Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, uint32 uiSpellEntry, uint32 selectFlags, SelectAttackingTargetParams params /*= SelectAttackingTargetParams()*/) const
 {
     return SelectAttackingTarget(target, position, sSpellTemplate.LookupEntry<SpellEntry>(uiSpellEntry), selectFlags);
 }
 
-Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, SpellEntry const* pSpellInfo /*= nullptr*/, uint32 selectFlags/*= 0*/) const
+Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, SpellEntry const* pSpellInfo /*= nullptr*/, uint32 selectFlags/*= 0*/, SelectAttackingTargetParams params /*= SelectAttackingTargetParams()*/) const
 {
     if (!CanHaveThreatList())
         return nullptr;
@@ -2212,7 +2219,7 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
             {
                 if (Unit* pTarget = GetMap()->GetUnit((*itr)->getUnitGuid()))
                 {
-                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags))
+                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags, params))
                         suitableUnits.push_back(pTarget);
                 }
             }
@@ -2231,7 +2238,7 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
             {
                 if (Unit* pTarget = GetMap()->GetUnit((*itr)->getUnitGuid()))
                 {
-                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags))
+                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags, params))
                         return pTarget;
                 }
             }
@@ -2249,7 +2256,7 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
             {
                 if (Unit* pTarget = GetMap()->GetUnit((*ritr)->getUnitGuid()))
                 {
-                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags))
+                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags, params))
                         return pTarget;
                 }
             }
@@ -2265,7 +2272,7 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
             {
                 if (Unit* pTarget = GetMap()->GetUnit((*itr)->getUnitGuid()))
                 {
-                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags))
+                    if ((!selectFlags && !pSpellInfo) || MeetsSelectAttackingRequirement(pTarget, pSpellInfo, selectFlags, params))
                         suitableUnits.push_back(pTarget);
                 }
             }

@@ -47,6 +47,7 @@
 #include "Tools/Language.h"
 #include "Maps/MapManager.h"
 #include "Loot/LootMgr.h"
+#include "AI/ScriptDevAI/include/sc_grid_searchers.h"
 
 #define NULL_AURA_SLOT 0xFF
 
@@ -281,7 +282,7 @@ pAuraHandler AuraHandler[TOTAL_AURAS] =
     &Aura::HandleUnused,                                    //222 unused (3.0.8a-3.2.2a) only for spell 44586 that not used in real spell cast
     &Aura::HandleNULL,                                      //223 dummy code (cast damage spell to attacker) and another dymmy (jump to another nearby raid member)
     &Aura::HandleUnused,                                    //224 unused (3.0.8a-3.2.2a)
-    &Aura::HandleNoImmediateEffect,                         //225 SPELL_AURA_PRAYER_OF_MENDING
+    &Aura::HandlePrayerOfMending,                           //225 SPELL_AURA_PRAYER_OF_MENDING
     &Aura::HandleAuraPeriodicDummy,                         //226 SPELL_AURA_PERIODIC_DUMMY
     &Aura::HandlePeriodicTriggerSpellWithValue,             //227 SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE
     &Aura::HandleNoImmediateEffect,                         //228 SPELL_AURA_DETECT_STEALTH
@@ -581,7 +582,7 @@ void AreaAura::Update(uint32 diff)
 
         if (!caster->hasUnitState(UNIT_STAT_ISOLATED))
         {
-            Unit* owner = caster->GetCharmerOrOwner();
+            Unit* owner = caster->GetMaster();
             if (!owner)
                 owner = caster;
             Spell::UnitList targets;
@@ -794,14 +795,14 @@ void AreaAura::Update(uint32 diff)
         else if (m_areaAuraType == AREA_AURA_PARTY)         // check if in same sub group
         {
             // not check group if target == owner or target == pet
-            if (caster->GetCharmerOrOwnerGuid() != target->GetObjectGuid() && caster->GetObjectGuid() != target->GetCharmerOrOwnerGuid())
+            if (caster->GetMasterGuid() != target->GetObjectGuid() && caster->GetObjectGuid() != target->GetMasterGuid())
             {
-                Player* check = caster->GetCharmerOrOwnerPlayerOrPlayerItself();
+                Player* check = caster->GetBeneficiaryPlayer();
 
                 Group* pGroup = check ? check->GetGroup() : nullptr;
                 if (pGroup)
                 {
-                    Player* checkTarget = target->GetCharmerOrOwnerPlayerOrPlayerItself();
+                    Player* checkTarget = target->GetBeneficiaryPlayer();
                     if (!checkTarget || !pGroup->SameSubGroup(check, checkTarget))
                         target->RemoveSingleAuraFromSpellAuraHolder(GetId(), GetEffIndex(), GetCasterGuid());
                 }
@@ -812,14 +813,14 @@ void AreaAura::Update(uint32 diff)
         else if (m_areaAuraType == AREA_AURA_RAID)          // Check if on same raid group
         {
             // not check group if target == owner or target == pet
-            if (caster->GetCharmerOrOwnerGuid() != target->GetObjectGuid() && caster->GetObjectGuid() != target->GetCharmerOrOwnerGuid())
+            if (caster->GetMasterGuid() != target->GetObjectGuid() && caster->GetObjectGuid() != target->GetMasterGuid())
             {
-                Player* check = caster->GetCharmerOrOwnerPlayerOrPlayerItself();
+                Player* check = caster->GetBeneficiaryPlayer();
 
                 Group* pGroup = check ? check->GetGroup() : nullptr;
                 if (pGroup)
                 {
-                    Player* checkTarget = target->GetCharmerOrOwnerPlayerOrPlayerItself();
+                    Player* checkTarget = target->GetBeneficiaryPlayer();
                     if (!checkTarget || !checkTarget->GetGroup() || checkTarget->GetGroup()->GetId() != pGroup->GetId())
                         target->RemoveSingleAuraFromSpellAuraHolder(GetId(), GetEffIndex(), GetCasterGuid());
                 }
@@ -829,7 +830,7 @@ void AreaAura::Update(uint32 diff)
         }
         else if (m_areaAuraType == AREA_AURA_PET || m_areaAuraType == AREA_AURA_OWNER)
         {
-            if (target->GetObjectGuid() != caster->GetCharmerOrOwnerGuid())
+            if (target->GetObjectGuid() != caster->GetMasterGuid())
                 target->RemoveSingleAuraFromSpellAuraHolder(GetId(), GetEffIndex(), GetCasterGuid());
         }
     }
@@ -2091,6 +2092,24 @@ void Aura::TriggerSpell()
                     caster->CastSpell(triggerTarget, trigger_spell_id, TRIGGERED_OLD_TRIGGERED, nullptr, this);
                 return;
             }
+            case 39088:                                     // Positive Charge
+            case 39091:                                     // Negative Charge
+            {
+                uint32 buffAuraId = auraId == 39088 ? 39089 : 39092;
+                uint32 curCount = 0;
+                std::list<Player*> playerList;
+                GetPlayerListWithEntryInWorld(playerList, target, 10.0f); // official range
+                for (Player* player : playerList)
+                    if (target != player && player->HasAura(auraId))
+                        curCount++;
+
+                target->RemoveAurasDueToSpell(buffAuraId);
+                if (curCount)
+                    for (uint32 i = 0; i < curCount; i++)
+                        target->CastSpell(target, buffAuraId, TRIGGERED_OLD_TRIGGERED);
+
+                break;
+            }
             case 43149:                                     // Claw Rage
             {
                 // Need to provide explicit target for trigger spell target combination
@@ -2252,6 +2271,13 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         // real time randomness is unclear, using max 30 seconds here
                         // see further down for expire of this aura
                         GetHolder()->SetAuraDuration(urand(1, 30)*IN_MILLISECONDS);
+                        return;
+                    }
+                    case 32441:                             // Brittle Bones
+                    {
+                        m_isPeriodic = true;
+                        m_modifier.periodictime = 10 * IN_MILLISECONDS; // randomly applies Rattled 32437
+                        m_periodicTimer = 0;
                         return;
                     }
                     case 33326:                             // Stolen Soul Dispel
@@ -2713,6 +2739,12 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 target->CastSpell(target, 36731, TRIGGERED_OLD_TRIGGERED, nullptr, this);
                 return;
             }
+            case 39088:                                     // Positive Charge
+                target->RemoveAurasDueToSpell(39089);
+                return;
+            case 39091:                                     // Negative Charge
+                target->RemoveAurasDueToSpell(39092);
+                return;
             case 41099:                                     // Battle Stance
             {
                 // Battle Aura
@@ -2749,7 +2781,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         return;
 
                     // Captured Totem Test Credit
-                    if (Player* pPlayer = pCaster->GetCharmerOrOwnerPlayerOrPlayerItself())
+                    if (Player* pPlayer = pCaster->GetBeneficiaryPlayer())
                         pPlayer->CastSpell(pPlayer, 42455, TRIGGERED_OLD_TRIGGERED);
                 }
 
@@ -5244,6 +5276,9 @@ void Aura::HandlePeriodicTriggerSpell(bool apply, bool /*Real*/)
                     if (Creature* creature = (Creature*)target)
                         creature->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, creature, creature);
                 return;
+            case 37670:                                     // Nether Charge Timer
+                target->CastSpell(nullptr, GetSpellProto()->EffectTriggerSpell[m_effIndex], TRIGGERED_OLD_TRIGGERED);
+                break;
             case 42783:                                     // Wrath of the Astrom...
                 if (m_removeMode == AURA_REMOVE_BY_EXPIRE && GetEffIndex() + 1 < MAX_EFFECT_INDEX)
                     target->CastSpell(target, GetSpellProto()->CalculateSimpleValue(SpellEffectIndex(GetEffIndex() + 1)), TRIGGERED_OLD_TRIGGERED);
@@ -5340,6 +5375,14 @@ void Aura::HandlePeriodicEnergize(bool apply, bool Real)
 void Aura::HandleAuraPowerBurn(bool apply, bool /*Real*/)
 {
     m_isPeriodic = apply;
+}
+
+void Aura::HandlePrayerOfMending(bool apply, bool /*Real*/)
+{
+    if (apply) // only on initial cast apply SP
+        if (const SpellEntry* entry = GetSpellProto())
+            if (GetHolder()->GetAuraCharges() == entry->procCharges)
+                m_modifier.m_amount = GetCaster()->SpellHealingBonusDone(GetTarget(), GetSpellProto(), m_modifier.m_amount, HEAL);
 }
 
 void Aura::HandleAuraPeriodicDummy(bool apply, bool Real)
@@ -7916,6 +7959,10 @@ void Aura::PeriodicDummyTick()
                     return;
                 }
 //              // Gossip NPC Periodic - Talk
+                case 32441:                                 // Brittle Bones
+                    if (roll_chance_i(33))
+                        target->CastSpell(target, 32437, true, nullptr, this);  // Rattled
+                    return;
 //              case 33208: break;
 //              // Gossip NPC Periodic - Despawn
 //              case 33209: break;

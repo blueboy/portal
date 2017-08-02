@@ -44,7 +44,7 @@ enum SpellCastFlags
     CAST_FLAG_UNKNOWN2          = 0x00000002,
     CAST_FLAG_UNKNOWN3          = 0x00000004,
     CAST_FLAG_UNKNOWN4          = 0x00000008,
-    CAST_FLAG_UNKNOWN5          = 0x00000010,
+    CAST_FLAG_PERSISTENT_AA     = 0x00000010,               // Spell has Persistent AA effect
     CAST_FLAG_AMMO              = 0x00000020,               // Projectiles visual
     CAST_FLAG_UNKNOWN7          = 0x00000040,               // !0x41 mask used to call CGTradeSkillInfo::DoRecast
     CAST_FLAG_UNKNOWN8          = 0x00000080,
@@ -664,6 +664,12 @@ class Spell
         typedef std::list<SpellEntry const*> SpellInfoList;
         SpellInfoList m_TriggerSpells;                      // casted by caster to same targets settings in m_targets at success finish of current spell
         SpellInfoList m_preCastSpells;                      // casted by caster to each target at spell hit before spell effects apply
+
+        //*****************************************
+        // Spell scripting subsystem
+        //*****************************************
+        // persistent value to enable storing in script
+        uint64 m_scriptValue;
 
         uint32 m_spellState;
         uint32 m_timer;

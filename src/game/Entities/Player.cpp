@@ -702,7 +702,7 @@ bool Player::Create(uint32 guidlow, const std::string& name, uint8 race, uint8 c
     InitDisplayIds();                                       // model, scale and model data
 
     SetByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_PVP);
-    SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
+    SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
     SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f);               // fix cast time showed in spell tooltip on client
     SetFloatValue(UNIT_FIELD_HOVERHEIGHT, 1.0f);            // default for players in 3.0.3
@@ -1286,7 +1286,7 @@ void Player::Update(uint32 update_diff, uint32 p_time)
         Unit* pVictim = getVictim();
         if (pVictim && !IsNonMeleeSpellCasted(false))
         {
-            Player* vOwner = pVictim->GetCharmerOrOwnerPlayerOrPlayerItself();
+            Player* vOwner = pVictim->GetBeneficiaryPlayer();
             if (vOwner && vOwner->IsPvP() && !IsInDuelWith(vOwner))
             {
                 UpdatePvP(true);
@@ -2822,7 +2822,7 @@ void Player::InitStatsForLevel(bool reapplyMods)
                UNIT_FLAG_STUNNED        | UNIT_FLAG_IN_COMBAT    | UNIT_FLAG_DISARMED         |
                UNIT_FLAG_CONFUSED       | UNIT_FLAG_FLEEING      | UNIT_FLAG_NOT_SELECTABLE   |
                UNIT_FLAG_SKINNABLE      | UNIT_FLAG_MOUNT        | UNIT_FLAG_TAXI_FLIGHT);
-    SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);    // must be set
+    SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);    // must be set
 
     SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER); // must be set
 
@@ -5706,7 +5706,7 @@ void Player::UpdateWeaponSkill(WeaponAttackType attType)
 {
     // no skill gain in pvp
     Unit* pVictim = getVictim();
-    if (pVictim && pVictim->IsCharmerOrOwnerPlayerOrPlayerItself())
+    if (pVictim && pVictim->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
         return;
 
     if (IsInFeralForm())
@@ -15804,8 +15804,8 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     SetPet(nullptr);
     SetTargetGuid(ObjectGuid());
     SetCharmerGuid(ObjectGuid());
-    SetOwnerGuid(ObjectGuid());
     SetCreatorGuid(ObjectGuid());
+    SetSummonerGuid(ObjectGuid());
 
     // reset some aura modifiers before aura apply
 
@@ -21034,7 +21034,7 @@ bool Player::isHonorOrXPTarget(Unit* pVictim) const
 
 void Player::RewardSinglePlayerAtKill(Unit* pVictim)
 {
-    bool PvP = pVictim->isCharmedOwnedByPlayerOrPlayer();
+    bool PvP = pVictim->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
     uint32 xp = PvP ? 0 : MaNGOS::XP::Gain(this, pVictim);
 
     // honor can be in PvP and !PvP (racial leader) cases
@@ -21186,7 +21186,7 @@ bool Player::IsClientControl(Unit* target) const
     return (target && !target->IsFleeing() && !target->IsConfused() && !target->IsTaxiFlying() &&
             (target->GetTypeId() != TYPEID_PLAYER ||
             !((Player*)target)->InBattleGround() || ((Player*)target)->GetBattleGround()->GetStatus() != STATUS_WAIT_LEAVE) &&
-            target->GetCharmerOrOwnerOrOwnGuid() == GetObjectGuid());
+            (target == this || target->GetMasterGuid() == GetObjectGuid()));
 }
 
 void Player::SetClientControl(Unit* target, uint8 allowMove) const
@@ -21343,30 +21343,43 @@ void Player::SendCorpseReclaimDelay(bool load) const
     GetSession()->SendPacket(data);
 }
 
-Player* Player::GetNextRandomRaidMember(float radius)
+Player* Player::GetNextRaidMemberWithLowestLifePercentage(float radius, AuraType noAuraType)
 {
     Group* pGroup = GetGroup();
     if (!pGroup)
         return nullptr;
 
-    std::vector<Player*> nearMembers;
-    nearMembers.reserve(pGroup->GetMembersCount());
+    Player* lowestPercentagePlayer = nullptr;
+    uint32 lowestPercentage = 100;
 
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
-        Player* Target = itr->getSource();
+        Player* target = itr->getSource();
 
-        // IsHostileTo check duel and controlled by enemy
-        if (Target && Target != this && IsWithinDistInMap(Target, radius) &&
-                !Target->HasInvisibilityAura() && !IsHostileTo(Target))
-            nearMembers.push_back(Target);
+        if (target && target != this)
+        {
+            // First not picked
+            if (!lowestPercentagePlayer)
+            {
+                lowestPercentagePlayer = target;
+                lowestPercentage = target->GetHealthPercent();
+                continue;
+            }
+
+            // IsHostileTo check duel and controlled by enemy
+            if (IsWithinDistInMap(target, radius) &&
+                !target->HasInvisibilityAura() && !IsHostileTo(target) && !target->HasAuraType(noAuraType))
+            {
+                if (target->GetHealthPercent() < lowestPercentage)
+                {
+                    lowestPercentagePlayer = target;
+                    lowestPercentage = target->GetHealthPercent();
+                }
+            }
+        }
     }
 
-    if (nearMembers.empty())
-        return nullptr;
-
-    uint32 randTarget = urand(0, nearMembers.size() - 1);
-    return nearMembers[randTarget];
+    return lowestPercentagePlayer;
 }
 
 PartyResult Player::CanUninviteFromGroup() const
@@ -22073,7 +22086,7 @@ void Player::HandleFall(MovementInfo const& movementInfo)
     // 14.57 can be calculated by resolving damageperc formula below to 0
     if (z_diff >= 14.57f && !isDead() && !isGameMaster() && !HasMovementFlag(MOVEFLAG_ONTRANSPORT) &&
             !HasAuraType(SPELL_AURA_HOVER) && !HasAuraType(SPELL_AURA_FEATHER_FALL) &&
-            !HasAuraType(SPELL_AURA_FLY) && !IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL))
+            !IsFreeFlying() && !IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL))
     {
         // Safe fall, fall height reduction
         int32 safe_fall = GetTotalAuraModifier(SPELL_AURA_SAFE_FALL);

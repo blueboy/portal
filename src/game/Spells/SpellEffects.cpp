@@ -811,14 +811,14 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
-                case 8606: //Summon Cyclonian
+                case 8606:                                  //Summon Cyclonian
                 {
                     if (!(m_targets.m_targetMask & TARGET_FLAG_DEST_LOCATION))
                         return;
 
                     float x, y, z;
                     m_targets.getDestination(x, y, z); // database loaded coordinates due to target type
-                    Creature* pCreature = m_caster->SummonCreature(6239, x, y, z, 0.0f, TEMPSUMMON_TIMED_OOC_DESPAWN, 30 * IN_MILLISECONDS);
+                    m_caster->SummonCreature(6239, x, y, z, 0.0f, TEMPSUMMON_TIMED_OOC_DESPAWN, 30 * IN_MILLISECONDS);
 
                     return;
                 }
@@ -1138,6 +1138,28 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     const uint32 spell_list[9] = {21886, 21900, 21901, 21902, 21903, 21904, 21905, 21906, 21907};
                     m_caster->CastSpell(m_caster, spell_list[urand(0, 8)], TRIGGERED_OLD_TRIGGERED);
                   return;
+                }
+                case 22276:                                 // Elemental Shield
+                {
+                    uint32 elemshields[] = { 22277, 22278, 22279, 22280, 22281 };
+
+                    for (uint32 spell : elemshields)
+                        if (m_caster->HasAura(spell))
+                            m_caster->RemoveAurasDueToSpell(spell);
+                    m_caster->CastSpell(m_caster, elemshields[urand(0, 4)], TRIGGERED_OLD_TRIGGERED);
+
+                    return;
+                }
+                case 22282:                                 // Brood Power
+                {
+                    uint32 broodpowers[] = { 22283, 22285, 22286, 22287, 22288 };
+
+                    for (uint32 spell : broodpowers)
+                        if (m_caster->HasAura(spell))
+                            m_caster->RemoveAurasDueToSpell(spell);
+                    m_caster->CastSpell(m_caster, broodpowers[urand(0, 4)], TRIGGERED_OLD_TRIGGERED);
+
+                    return;
                 }
                 case 23019:                                 // Crystal Prison Dummy DND
                 {
@@ -1489,6 +1511,35 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     int32 basepoints0 = 100;
                     m_caster->CastCustomSpell(unitTarget, 37675, &basepoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+                    return;
+                }
+                case 39096:                                 // Polarity Shift
+                {
+                    if (!unitTarget)
+                        return;
+
+                    unitTarget->RemoveAurasDueToSpell(39088);
+                    unitTarget->RemoveAurasDueToSpell(39091);
+
+                    // 39088 39091
+                    switch (m_scriptValue)
+                    {
+                        case 0: // first target random
+                            m_scriptValue = urand(0, 1) ? 39088 : 39091;
+                            unitTarget->CastSpell(unitTarget, m_scriptValue, TRIGGERED_OLD_TRIGGERED);
+                            break;
+                        case 39088: // second target the other
+                            m_scriptValue = 1;
+                            unitTarget->CastSpell(unitTarget, 39091, TRIGGERED_OLD_TRIGGERED);
+                            break;                           
+                        case 39091:
+                            m_scriptValue = 1;
+                            unitTarget->CastSpell(unitTarget, 39088, TRIGGERED_OLD_TRIGGERED);
+                            break;
+                        default: // third and later random
+                            unitTarget->CastSpell(unitTarget, urand(0, 1) ? 39088 : 39091, TRIGGERED_OLD_TRIGGERED);
+                            break;
+                    }
                     return;
                 }
                 case 39189:                                 // Sha'tari Torch
@@ -2533,7 +2584,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 case 51858:                                 // Siphon of Acherus
                 {
                     if (m_originalCaster && unitTarget && unitTarget->GetTypeId() == TYPEID_UNIT)
-                        if (Player* pPlayer = m_originalCaster->GetCharmerOrOwnerPlayerOrPlayerItself())
+                        if (Player* pPlayer = m_originalCaster->GetBeneficiaryPlayer())
                             pPlayer->KilledMonsterCredit(unitTarget->GetEntry(), unitTarget->GetObjectGuid());
 
                     return;
@@ -3682,7 +3733,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     Unit* friendTarget = !unitTarget || unitTarget->IsFriendlyTo(m_caster) ? unitTarget : unitTarget->getVictim();
                     if (friendTarget)
                     {
-                        Player* player = friendTarget->GetCharmerOrOwnerPlayerOrPlayerItself();
+                        Player* player = friendTarget->GetBeneficiaryPlayer();
                         if (!player || !player->IsInSameRaidWith((Player*)m_caster))
                             friendTarget = nullptr;
                     }
@@ -5766,24 +5817,23 @@ bool Spell::DoSummonCritter(CreatureSummonPositions& list, SummonPropertiesEntry
 
     // critter->SetName("");                                // generated by client
     critter->SetOwnerGuid(m_caster->GetObjectGuid());
-    critter->SetCreatorGuid(m_caster->GetObjectGuid());
     critter->setFaction(m_caster->getFaction());
     critter->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
     critter->SelectLevel();                                 // some summoned critters have different from 1 DB data for level/hp
-    critter->SetUInt32Value(UNIT_NPC_FLAGS, critter->GetCreatureInfo()->NpcFlags);
-    // some mini-pets have quests
-
-    critter->InitPetCreateSpells();                         // e.g. disgusting oozeling has a create spell as critter...
-    // critter->InitLevelupSpellsForLevel();                // none?
-
-    // set timer for unsummon
-    if (m_duration > 0)
+    const CreatureInfo* info = critter->GetCreatureInfo();
+    // Some companions have additional UNIT_FLAG_NON_ATTACKABLE (0x2), perphaps coming from template, so add template flags
+    critter->SetUInt32Value(UNIT_FIELD_FLAGS, (UNIT_FLAG_OOC_NOT_ATTACKABLE | UNIT_FLAG_PASSIVE | info->UnitFlags));
+    critter->SetUInt32Value(UNIT_NPC_FLAGS, info->NpcFlags);// some companions may have quests, so they need npc flags
+    critter->InitPetCreateSpells();                         // some companions may have spells (e.g. disgusting oozeling)
+    if (m_duration > 0)                                     // set timer for unsummon
         critter->SetDuration(m_duration);
 
     m_caster->SetMiniPet(critter);
 
-    if (m_caster->GetTypeId() == TYPEID_PLAYER)
-        critter->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SUPPORTABLE | UNIT_BYTE2_FLAG_AURAS);
+    if (m_caster->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+        critter->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+
+    critter->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SUPPORTABLE | UNIT_BYTE2_FLAG_UNK5);
 
     return true;
 }
@@ -5852,10 +5902,15 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
         spawnCreature->SetUInt32Value(UNIT_NPC_FLAGS, cInfo->NpcFlags);
         spawnCreature->setFaction(m_caster->getFaction());
         spawnCreature->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, 0);
-        spawnCreature->SetCreatorGuid(m_caster->GetObjectGuid());
         spawnCreature->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
 
         spawnCreature->InitStatsForLevel(level);
+
+        if (m_caster->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+            spawnCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+
+        if (m_caster->IsPvP())
+            spawnCreature->SetPvP(true);
 
         if (CharmInfo* charmInfo = spawnCreature->GetCharmInfo())
         {
@@ -5870,6 +5925,8 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
         }
 
         m_caster->AddGuardian(spawnCreature);
+
+        spawnCreature->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SUPPORTABLE | UNIT_BYTE2_FLAG_UNK5);
     }
 
     return true;
@@ -5912,7 +5969,9 @@ bool Spell::DoSummonTotem(SpellEffectIndex eff_idx, uint8 slot_dbc)
         m_caster->_AddTotem(TotemSlot(slot), pTotem);
 
     // pTotem->SetName("");                                 // generated by client
-    pTotem->SetOwner(m_caster);
+    pTotem->SetOwnerGuid(m_caster->GetObjectGuid());
+    pTotem->setFaction(m_caster->getFaction());
+    pTotem->SetLevel(m_caster->getLevel());
     pTotem->SetTypeBySummonSpell(m_spellInfo);              // must be after Create call where m_spells initialized
 
     pTotem->SetDuration(m_duration);
@@ -5925,8 +5984,8 @@ bool Spell::DoSummonTotem(SpellEffectIndex eff_idx, uint8 slot_dbc)
 
     pTotem->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
 
-    if (m_caster->GetTypeId() == TYPEID_PLAYER)
-        pTotem->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
+    if (m_caster->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+        pTotem->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
 
     if (m_caster->IsPvP())
         pTotem->SetPvP(true);
@@ -6027,7 +6086,6 @@ bool Spell::DoSummonPet(SpellEffectIndex eff_idx)
     spawnCreature->SetOwnerGuid(m_caster->GetObjectGuid());
     spawnCreature->setFaction(m_caster->getFaction());
     spawnCreature->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, 0);
-    spawnCreature->SetCreatorGuid(m_caster->GetObjectGuid());
     spawnCreature->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
 
     spawnCreature->InitStatsForLevel(level);
@@ -6347,6 +6405,7 @@ void Spell::EffectAddFarsight(SpellEffectIndex eff_idx)
 
     ((Player*)m_caster)->GetCamera().SetView(dynObj);
 }
+
 
 void Spell::EffectTeleUnitsFaceCaster(SpellEffectIndex eff_idx)
 {
@@ -6673,7 +6732,6 @@ void Spell::EffectTameCreature(SpellEffectIndex /*eff_idx*/)
     }
 
     pet->SetOwnerGuid(plr->GetObjectGuid());
-    pet->SetCreatorGuid(plr->GetObjectGuid());
     pet->setFaction(plr->getFaction());
     pet->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
 
@@ -6786,7 +6844,6 @@ void Spell::EffectSummonPet(SpellEffectIndex eff_idx)
 
     NewSummon->GetCharmInfo()->SetReactState(REACT_DEFENSIVE);
     NewSummon->SetOwnerGuid(m_caster->GetObjectGuid());
-    NewSummon->SetCreatorGuid(m_caster->GetObjectGuid());
     NewSummon->setFaction(m_caster->getFaction());
     NewSummon->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(nullptr)));
     NewSummon->SetUInt32Value(UNIT_CREATED_BY_SPELL, m_spellInfo->Id);
@@ -6808,10 +6865,12 @@ void Spell::EffectSummonPet(SpellEffectIndex eff_idx)
     m_caster->SetPet(NewSummon);
     DEBUG_LOG("New Pet has guid %u", NewSummon->GetGUIDLow());
 
+    if (m_caster->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+        NewSummon->SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+
     if (m_caster->GetTypeId() == TYPEID_PLAYER)
     {
         NewSummon->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
-        NewSummon->SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
 
         NewSummon->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SUPPORTABLE | UNIT_BYTE2_FLAG_AURAS);
 
@@ -9273,7 +9332,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_UNIT)
                         return;
 
-                    Unit* owner = unitTarget->GetCharmerOrOwnerPlayerOrPlayerItself();
+                    Unit* owner = unitTarget->GetBeneficiaryPlayer();
                     if (!owner)
                         return;
 
@@ -12021,7 +12080,6 @@ void Spell::EffectCreateTamedPet(SpellEffectIndex eff_idx)
     newTamedPet->SetRespawnCoord(pos);
 
     newTamedPet->SetOwnerGuid(unitTarget->GetObjectGuid());
-    newTamedPet->SetCreatorGuid(unitTarget->GetObjectGuid());
     newTamedPet->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
     newTamedPet->setFaction(unitTarget->getFaction());
     newTamedPet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(nullptr)));

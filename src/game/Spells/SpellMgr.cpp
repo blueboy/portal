@@ -77,7 +77,7 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
 {
     int32 duration = GetSpellDuration(spellInfo);
 
-    if (duration != -1 && caster)
+    if (duration != -1 && caster && !spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_DONE_BONUS))
     {
         int32 maxduration = GetSpellMaxDuration(spellInfo);
 
@@ -123,8 +123,8 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell)
 
     int32 castTime = spellCastTimeEntry->CastTime;
 
-    // Multi shot: Only (alternative set CastingTimeIndex = 3)
-    if (spellInfo->HasAttribute(SPELL_ATTR_RANGED) && (spellInfo->SpellFamilyFlags & 0x0000000000001000) && (!spell || !spell->IsAutoRepeat()))
+    // Hunter Ranged spells need cast time + 0.5s to reflect tooltips, excluding Auto Shot
+    if (spellInfo->HasAttribute(SPELL_ATTR_RANGED) && (!spell || !spell->IsAutoRepeat()))
         castTime += 500;
 
     if (spell)
@@ -132,13 +132,10 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell)
         if (Player* modOwner = spell->GetCaster()->GetSpellModOwner())
             modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime);
 
-        if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL))
+        if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_DONE_BONUS))
             castTime = int32(castTime * spell->GetCaster()->GetFloatValue(UNIT_MOD_CAST_SPEED));
-        else
-        {
-            if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
-                castTime = int32(castTime * spell->GetCaster()->m_modAttackSpeedPct[RANGED_ATTACK]);
-        }
+        else if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
+            castTime = int32(castTime * spell->GetCaster()->m_modAttackSpeedPct[RANGED_ATTACK]);
     }
 
     return (castTime > 0) ? uint32(castTime) : 0;

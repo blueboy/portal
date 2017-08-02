@@ -178,6 +178,7 @@ bool CreatureEventAI::IsTimerBasedEvent(EventAI_Type type) const
         case EVENT_T_TARGET_MISSING_AURA:
         case EVENT_T_RANGE:
         case EVENT_T_ENERGY:
+        case EVENT_T_SELECT_ATTACKING_TARGET:
             return true;
         default:
             return false;
@@ -264,7 +265,7 @@ bool CreatureEventAI::ProcessEvent(CreatureEventAIHolder& pHolder, Unit* pAction
             break;
         case EVENT_T_DEATH:
             if (event.death.conditionId)
-                if (Player* player = pActionInvoker->GetCharmerOrOwnerPlayerOrPlayerItself())
+                if (Player* player = pActionInvoker->GetBeneficiaryPlayer())
                     if (!sObjectMgr.IsPlayerMeetToCondition(event.death.conditionId, player, player->GetMap(), m_creature, CONDITION_FROM_EVENTAI))
                         return false;
             break;
@@ -469,6 +470,20 @@ bool CreatureEventAI::ProcessEvent(CreatureEventAIHolder& pHolder, Unit* pAction
             if (perc > event.percent_range.percentMax || perc < event.percent_range.percentMin)
                 return false;
 
+            LOG_PROCESS_EVENT;
+            // Repeat Timers
+            pHolder.UpdateRepeatTimer(m_creature, event.percent_range.repeatMin, event.percent_range.repeatMax);
+            break;
+        }
+        case EVENT_T_SELECT_ATTACKING_TARGET:
+        {
+            SelectAttackingTargetParams parameters;
+            parameters.range.minRange = event.selectTarget.minRange;
+            parameters.range.maxRange = event.selectTarget.maxRange;
+            if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, nullptr, SELECT_FLAG_RANGE_RANGE, parameters))
+                m_eventTarget = target;
+            else
+                return false;
             LOG_PROCESS_EVENT;
             // Repeat Timers
             pHolder.UpdateRepeatTimer(m_creature, event.percent_range.repeatMin, event.percent_range.repeatMax);
@@ -922,7 +937,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                 // if not available, use pActionInvoker
                 if (Unit* pTarget = GetTargetByType(action.killed_monster.target, pActionInvoker, pAIEventSender, reportTargetError, 0, SELECT_FLAG_PLAYER))
                 {
-                    if (Player* pPlayer2 = pTarget->GetCharmerOrOwnerPlayerOrPlayerItself())
+                    if (Player* pPlayer2 = pTarget->GetBeneficiaryPlayer())
                         pPlayer2->RewardPlayerAndGroupAtEvent(action.killed_monster.creatureId, m_creature);
                 }
                 else if (reportTargetError)
@@ -1192,7 +1207,7 @@ void CreatureEventAI::JustDied(Unit* killer)
     if (m_creature->IsGuard())
     {
         // Send Zone Under Attack message to the LocalDefense and WorldDefense Channels
-        if (Player* pKiller = killer->GetCharmerOrOwnerPlayerOrPlayerItself())
+        if (Player* pKiller = killer->GetBeneficiaryPlayer())
             m_creature->SendZoneUnderAttackMessage(pKiller);
     }
 
@@ -1276,6 +1291,11 @@ void CreatureEventAI::EnterCombat(Unit* enemy)
             // Reset all in combat timers
             case EVENT_T_TIMER_IN_COMBAT:
                 if (i->UpdateRepeatTimer(m_creature, event.timer.initialMin, event.timer.initialMax))
+                    i->Enabled = true;
+                break;
+            // Reset some special combat timers using repeatMin/Max
+            case EVENT_T_SELECT_ATTACKING_TARGET:
+                if (i->UpdateRepeatTimer(m_creature, event.timer.repeatMin, event.timer.repeatMax))
                     i->Enabled = true;
                 break;
             default:
@@ -1503,7 +1523,7 @@ inline Unit* CreatureEventAI::GetTargetByType(uint32 Target, Unit* pActionInvoke
                 isError = true;
             return pActionInvoker;
         case TARGET_T_ACTION_INVOKER_OWNER:
-            resTarget = pActionInvoker ? pActionInvoker->GetCharmerOrOwnerOrSelf() : nullptr;
+            resTarget = pActionInvoker ? pActionInvoker->GetBeneficiary() : nullptr;
             if (!resTarget)
                 isError = true;
             return resTarget;
@@ -1521,6 +1541,10 @@ inline Unit* CreatureEventAI::GetTargetByType(uint32 Target, Unit* pActionInvoke
                 return nullptr;
             }
         }
+        case TARGET_T_EVENT_SPECIFIC:
+            if (!m_eventTarget)
+                isError = true;
+            return m_eventTarget;
         default:
             isError = true;
             return nullptr;
