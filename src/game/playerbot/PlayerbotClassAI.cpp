@@ -1,6 +1,11 @@
 #include "PlayerbotClassAI.h"
 #include "Common.h"
 
+#include "Grids/Cell.h"
+#include "Grids/CellImpl.h"
+#include "Grids/GridNotifiers.h"
+#include "Grids/GridNotifiersImpl.h"
+
 PlayerbotClassAI::PlayerbotClassAI(Player* const master, Player* const bot, PlayerbotAI* const ai)
 {
     m_master = master;
@@ -39,10 +44,6 @@ bool PlayerbotClassAI::EatDrinkBandage(bool bMana, unsigned char foodPercent, un
         foodItem = m_ai->FindFood();
     if (drinkItem || foodItem)
     {
-        // have it wait until drinks are finished and/or combat begins
-        m_ai->SetCombatOrder(PlayerbotAI::ORDERS_TEMP_WAIT_OOC);
-        SetWait(25); // seconds
-
         if (drinkItem)
         {
             m_ai->TellMaster("I could use a drink.");
@@ -159,6 +160,49 @@ CombatManeuverReturns PlayerbotClassAI::Buff(bool (*BuffHelper)(PlayerbotAI*, ui
 
     //DEBUG_LOG(".No buff");
     return RETURN_NO_ACTION_OK;
+}
+
+/**
+ * NeedGroupBuff()
+ * return boolean Returns true if more than two targets in the bot's group need the group buff.
+ *
+ * params:groupBuffSpellId uint32 the spell ID of the group buff like Arcane Brillance
+ * params:singleBuffSpellId uint32 the spell ID of the single target buff equivalent of the group buff like Arcane Intellect for group buff Arcane Brillance
+ * return false if false is returned, the bot is expected to perform a buff check for the single target buff of the group buff.
+ *
+ */
+bool PlayerbotClassAI::NeedGroupBuff(uint32 groupBuffSpellId, uint32 singleBuffSpellId)
+{
+    if (!m_bot) return false;
+
+    uint8 numberOfGroupTargets = 0;
+    // Check group players to avoid using regeant and mana with an expensive group buff
+    // when only two players or less need it
+    if (m_bot->GetGroup())
+    {
+        Group::MemberSlotList const& groupSlot = m_bot->GetGroup()->GetMemberSlots();
+        for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
+        {
+            Player *groupMember = sObjectMgr.GetPlayer(itr->guid);
+            if (!groupMember || !groupMember->isAlive())
+                continue;
+            // Check if group member needs buff
+            if (!groupMember->HasAura(groupBuffSpellId, EFFECT_INDEX_0) && !groupMember->HasAura(singleBuffSpellId, EFFECT_INDEX_0))
+                numberOfGroupTargets++;
+            // Don't forget about pet
+            Pet * pet = groupMember->GetPet();
+            if (pet && !pet->HasAuraType(SPELL_AURA_MOD_UNATTACKABLE) && (pet->HasAura(groupBuffSpellId, EFFECT_INDEX_0) || pet->HasAura(singleBuffSpellId, EFFECT_INDEX_0)))
+                numberOfGroupTargets++;
+        }
+        // treshold set to 2 targets because beyond that value, the group buff cost is cheaper in mana
+        if (numberOfGroupTargets < 3)
+            return false;
+
+        // In doubt, buff everyone
+        return true;
+    }
+    else
+        return false;   // no group, no group buff
 }
 
 /**
@@ -282,6 +326,245 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
                 x = i;
     }
     if (x > -1) return targets.at(x).p;
+
+    return nullptr;
+}
+
+/**
+ * FleeFromAoEIfCan()
+ * return boolean Check if the bot can move out of the hostile AoE spell then try to find a proper destination and move towards it
+ *                The AoE is assumed to be centered on the current bot location (this is the case most of the time)
+ *
+ * params: spellId uint32 the spell ID of the hostile AoE the bot is supposed to move from. It is used to find the radius of the AoE spell
+ * params: pTarget Unit* the creature or gameobject the bot will use to define one of the prefered direction in which to flee
+ *
+ * return true if bot has found a proper destination, false if none was found
+ */
+bool PlayerbotClassAI::FleeFromAoEIfCan(uint32 spellId, Unit* pTarget)
+{
+    if (!m_bot) return false;
+    if (!spellId) return false;
+
+    // Step 1: Get radius from hostile AoE spell
+    float radius = 0;
+    SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    if (spellproto)
+        radius = GetSpellRadius(sSpellRadiusStore.LookupEntry(spellproto->EffectRadiusIndex[EFFECT_INDEX_0]));
+
+    // Step 2: Get current bot position to move from it
+    float curr_x, curr_y, curr_z;
+    m_bot->GetPosition(curr_x, curr_y, curr_z);
+    return FleeFromPointIfCan(radius, pTarget, curr_x, curr_y, curr_z);
+}
+
+/**
+ * FleeFromTrapGOIfCan()
+ * return boolean Check if the bot can move from a hostile nearby trap, then try to find a proper destination and move towards it
+ *
+ * params: goEntry uint32 the ID of the hostile trap the bot is supposed to move from. It is used to find the radius of the trap
+ * params: pTarget Unit* the creature or gameobject the bot will use to define one of the prefered direction in which to flee
+ *
+ * return true if bot has found a proper destination, false if none was found
+ */
+bool PlayerbotClassAI::FleeFromTrapGOIfCan(uint32 goEntry, Unit* pTarget)
+{
+    if (!m_bot) return false;
+    if (!goEntry) return false;
+
+    // Step 1: check if the GO exists and find its trap radius
+    GameObjectInfo const* trapInfo = sGOStorage.LookupEntry<GameObjectInfo>(goEntry);
+    if (!trapInfo || trapInfo->type != GAMEOBJECT_TYPE_TRAP)
+        return false;
+
+    float trapRadius = float(trapInfo->trap.radius);
+
+    // Step 2: find a GO in the range around player
+    GameObject* pGo = nullptr;
+
+    MaNGOS::NearestGameObjectEntryInObjectRangeCheck go_check(*m_bot, goEntry, trapRadius);
+    MaNGOS::GameObjectLastSearcher<MaNGOS::NearestGameObjectEntryInObjectRangeCheck> searcher(pGo, go_check);
+
+    Cell::VisitGridObjects(m_bot, searcher, trapRadius);
+
+    if (!pGo)
+        return false;
+
+    return FleeFromPointIfCan(trapRadius, pTarget, pGo->GetPositionX(), pGo->GetPositionY(), pGo->GetPositionZ());
+}
+
+/**
+ * FleeFromNpcWithAuraIfCan()
+ * return boolean Check if the bot can move from a creature having a specific aura, then try to find a proper destination and move towards it
+ *
+ * params: goEntry uint32 the ID of the hostile trap the bot is supposed to move from. It is used to find the radius of the trap
+ * params: spellId uint32 the spell ID of the aura the creature is supposed to have (directly or from triggered spell). It is used to find the radius of the aura
+ * params: pTarget Unit* the creature or gameobject the bot will use to define one of the prefered direction in which to flee
+ *
+ * return true if bot has found a proper destination, false if none was found
+ */
+bool PlayerbotClassAI::FleeFromNpcWithAuraIfCan(uint32 NpcEntry, uint32 spellId, Unit* pTarget)
+{
+    if (!m_bot) return false;
+    if (!NpcEntry) return false;
+    if (!spellId) return false;
+
+    // Step 1: Get radius from hostile aura spell
+    float radius = 0;
+    SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    if (spellproto)
+        radius = GetSpellRadius(sSpellRadiusStore.LookupEntry(spellproto->EffectRadiusIndex[EFFECT_INDEX_0]));
+
+    if (radius == 0)
+        return false;
+
+    // Step 2: find a close creature with the right entry:
+    Creature* pCreature = nullptr;
+
+    MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck creature_check(*m_bot, NpcEntry, false, false, radius, true);
+    MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(pCreature, creature_check);
+
+    Cell::VisitGridObjects(m_bot, searcher, radius);
+
+    if (!pCreature)
+        return false;
+
+    // Force to flee on a direction opposite to the position of the creature (fleeing from it, not only avoiding it)
+    return FleeFromPointIfCan(radius, pTarget, pCreature->GetPositionX(), pCreature->GetPositionY(), pCreature->GetPositionZ(), M_PI_F);
+}
+
+/**
+ * FleeFromPointIfCan()
+ * return boolean Check if the bot can move from a provided point (x, y, z) to given distance radius
+ *
+ * params: radius uint32 the minimal radius (distance) used by the bot to look for a destination from the provided position
+ * params: pTarget Unit* the creature or gameobject the bot will use to define one of the prefered direction in which to flee
+ * params: x0, y0, z0 float the coordinates of the origin point used to calculate the destination point
+ * params: forcedAngle float (optional) when iterating to find a proper point in world to move the bot to, this angle will be prioritly used over other angles if it is provided
+ *
+ * return true if bot has found a proper destination, false if none was found
+ */
+bool PlayerbotClassAI::FleeFromPointIfCan(uint32 radius, Unit* pTarget, float x0, float y0, float z0, float forcedAngle /* = 0.0f */)
+{
+    if (!m_bot) return false;
+    if (!m_ai) return false;
+
+    // Get relative position to current target
+    // the bot will try to move on a tangential axis from it
+    float dist_from_target, angle_to_target;
+    if (pTarget)
+    {
+        dist_from_target = pTarget->GetDistance(m_bot);
+        if (dist_from_target > 0.2f)
+            angle_to_target = pTarget->GetAngle(m_bot);
+        else
+            angle_to_target = frand(0, 2 * M_PI_F);
+    }
+    else
+    {
+        dist_from_target = 0.0f;
+        angle_to_target = frand(0, 2 * M_PI_F);
+    }
+
+    // Find coords to move to
+    // The bot will move for a distance equal to the spell radius + 1 yard for more safety
+    float dist = radius + 1.0f;
+
+    float moveAngles[3] = {- M_PI_F / 2, M_PI_F / 2, 0.0f};
+    float angle, x, y, z;
+    bool foundCoords;
+    for (uint8 i = 0; i < 3; i++)
+    {
+        // define an angle tangential to target's direction
+        angle = angle_to_target + moveAngles[i];
+        // if an angle was provided, use it instead but only for the first iteration in case this does not lead to a valid point
+        if (forcedAngle != 0.0f)
+        {
+            angle = forcedAngle;
+            forcedAngle = 0.0f;
+        }
+        foundCoords = true;
+
+        x = x0 + dist * cos(angle);
+        y = y0 + dist * sin(angle);
+        z = z0 + 0.5f;
+
+        // try to fix z
+        if (!m_bot->GetMap()->GetHeightInRange(m_bot->GetPhaseMask(), x, y, z))
+            foundCoords = false;
+
+        // check any collision
+        float testZ = z + 0.5f; // needed to avoid some false positive hit detection of terrain or passable little object
+        if (m_bot->GetMap()->GetHitPosition(x0, y0, z0 + 0.5f, x, y, testZ, m_bot->GetPhaseMask(), -0.1f))
+        {
+            z = testZ;
+            if (!m_bot->GetMap()->GetHeightInRange(m_bot->GetPhaseMask(), x, y, z))
+                foundCoords = false;
+        }
+
+        if (foundCoords)
+        {
+            m_ai->InterruptCurrentCastingSpell();
+            m_bot->GetMotionMaster()->MovePoint(0, x, y, z);
+            m_ai->SetIgnoreUpdateTime(2);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * GetDispelTarget()
+ * return Unit* Returns unit to be dispelled. First checks 'critical' Healer(s), next Tank(s), next Master (if different from:), next DPS.
+ *
+ * return NULL If NULL is returned, no healing is required. At all.
+ *
+ * Will need extensive re-write for co-operation amongst multiple healers. As it stands, multiple healers would all pick the same 'ideal'
+ * healing target.
+ */
+Player* PlayerbotClassAI::GetDispelTarget(DispelType dispelType, JOB_TYPE type, bool bMustBeOOC)
+{
+    if (!m_ai)  return nullptr;
+    if (!m_bot) return nullptr;
+    if (!m_bot->isAlive() || m_bot->IsInDuel()) return nullptr;
+    if (bMustBeOOC && m_bot->isInCombat()) return nullptr;
+
+    // First, fill the list of targets
+    if (m_bot->GetGroup())
+    {
+        // define seperately for sorting purposes - DO NOT CHANGE ORDER!
+        std::vector<heal_priority> targets;
+
+        Group::MemberSlotList const& groupSlot = m_bot->GetGroup()->GetMemberSlots();
+        for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
+        {
+            Player *groupMember = sObjectMgr.GetPlayer(itr->guid);
+            if (!groupMember || !groupMember->isAlive())
+                continue;
+            JOB_TYPE job = GetTargetJob(groupMember);
+            if (job & type)
+            {
+                uint32 dispelMask  = GetDispellMask(dispelType);
+                Unit::SpellAuraHolderMap const& auras = groupMember->GetSpellAuraHolderMap();
+                for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
+                {
+                    SpellAuraHolder *holder = itr->second;
+                    // Only return group members with negative magic effect
+                    if (dispelType == DISPEL_MAGIC && holder->IsPositive())
+                        continue;
+                    // poison, disease and curse are always negative: return everyone
+                    if ((1 << holder->GetSpellProto()->Dispel) & dispelMask)
+                        targets.push_back( heal_priority(groupMember, 0, job) );
+                }
+            }
+        }
+
+        // Sorts according to type: Healers first, tanks next, then master followed by DPS, thanks to the order of the TYPE enum
+        std::sort(targets.begin(), targets.end());
+
+        if (targets.size())
+            return targets.at(0).p;
+    }
 
     return nullptr;
 }

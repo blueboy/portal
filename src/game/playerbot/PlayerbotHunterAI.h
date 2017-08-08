@@ -107,6 +107,7 @@ private:
     CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
 
     // Hunter
+    bool IsTargetEnraged(Unit* pTarget);
     bool m_petSummonFailed;
     bool m_rangedCombat;
     bool m_has_ammo;

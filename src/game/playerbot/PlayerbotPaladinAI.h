@@ -111,7 +111,7 @@ private:
     //Changes aura according to spec/orders
     void CheckAuras();
     //Changes Seal according to spec
-    void CheckSeals();
+    bool CheckSeals();
 
     static bool BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *target);
 

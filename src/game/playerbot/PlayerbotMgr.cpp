@@ -1,18 +1,19 @@
 #include "Config/Config.h"
 #include "config.h"
-#include "Entities/Player.h"
+#include "../Entities/Player.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
 #include "WorldPacket.h"
-#include "Chat/Chat.h"
-#include "Globals/ObjectMgr.h"
-#include "Entities/GossipDef.h"
-#include "Tools/Language.h"
-#include "MotionGenerators/WaypointMovementGenerator.h"
-#include "Guilds/Guild.h"
-#include "World/World.h"
-#include "Loot/LootMgr.h"
-#include "Accounts/AccountMgr.h"
+#include "../Chat/Chat.h"
+#include "../Globals/ObjectMgr.h"
+#include "../Globals/ObjectAccessor.h"
+#include "../Entities/GossipDef.h"
+#include "../Tools/Language.h"
+#include "../MotionGenerators/WaypointMovementGenerator.h"
+#include "../Guilds/Guild.h"
+#include "../Loot/LootMgr.h"
+#include "../Accounts/AccountMgr.h"
+#include "../World/World.h"
 
 class LoginQueryHolder;
 class CharacterHandler;
@@ -375,14 +376,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
 
             case TEXTEMOTE_EAT:
             case TEXTEMOTE_DRINK:
-                {
-                    for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
-                    {
-                        Player* const bot = it->second;
-                        bot->GetPlayerbotAI()->Feast();
-                    }
-                    return;
-                }
+                return;
 
                 // emote to attack selected target
             case TEXTEMOTE_POINT:

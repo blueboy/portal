@@ -144,7 +144,8 @@ private:
            DALARAN_BRILLIANCE,
            MANA_SHIELD,
            DAMPEN_MAGIC,
-           AMPLIFY_MAGIC;
+           AMPLIFY_MAGIC,
+           MAGE_REMOVE_CURSE;
 
     // racial
     uint32 ARCANE_TORRENT,

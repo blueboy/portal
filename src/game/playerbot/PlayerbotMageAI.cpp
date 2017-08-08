@@ -48,6 +48,7 @@ PlayerbotMageAI::PlayerbotMageAI(Player* const master, Player* const bot, Player
     ICE_ARMOR               = m_ai->initSpell(ICE_ARMOR_1);
     ICE_BLOCK               = m_ai->initSpell(ICE_BLOCK_1);
     COLD_SNAP               = m_ai->initSpell(COLD_SNAP_1);
+    MAGE_REMOVE_CURSE       = m_ai->initSpell(REMOVE_CURSE_MAGE_1);
 
     // RANGED COMBAT
     SHOOT                   = m_ai->initSpell(SHOOT_2);
@@ -155,6 +156,14 @@ CombatManeuverReturns PlayerbotMageAI::DoNextCombatManeuverPVE(Unit *pTarget)
 
     //Used to determine if this bot is highest on threat
     Unit *newTarget = m_ai->FindAttacker((PlayerbotAI::ATTACKERINFOTYPE) (PlayerbotAI::AIT_VICTIMSELF | PlayerbotAI::AIT_HIGHESTTHREAT), m_bot);
+    
+    // Remove curse on group members
+    if (Player* pCursedTarget = GetDispelTarget(DISPEL_CURSE))
+    {
+        if (MAGE_REMOVE_CURSE > 0 && CastSpell(MAGE_REMOVE_CURSE, pCursedTarget))
+            return RETURN_CONTINUE;
+    }
+
     if (newTarget) // TODO: && party has a tank
     {
         // Insert instant threat reducing spell (if a mage has one)
@@ -289,6 +298,13 @@ void PlayerbotMageAI::DoNonCombatActions()
     if (!m_bot || !master)
         return;
 
+    // Remove curse on group members
+    if (Player* pCursedTarget = GetDispelTarget(DISPEL_CURSE))
+    {
+        if (MAGE_REMOVE_CURSE > 0 && CastSpell(MAGE_REMOVE_CURSE, pCursedTarget))
+            return;
+    }
+
     // Buff armor
     if (MOLTEN_ARMOR)
     {
@@ -310,17 +326,15 @@ void PlayerbotMageAI::DoNonCombatActions()
             return;
 
     // buff group
-    if (m_bot->GetGroup() && ARCANE_BRILLIANCE && m_ai->In_Reach(m_bot,ARCANE_BRILLIANCE) && m_ai->HasSpellReagents(ARCANE_BRILLIANCE) && m_ai->Buff(ARCANE_BRILLIANCE, m_bot))
-        return;
-    if (Buff(&PlayerbotMageAI::BuffHelper, ARCANE_INTELLECT, (JOB_ALL | JOB_MANAONLY)) & RETURN_CONTINUE)
+    // the check for group targets is performed by NeedGroupBuff (if group is found for bots by the function)
+    if (NeedGroupBuff(ARCANE_BRILLIANCE, ARCANE_INTELLECT) && m_ai->HasSpellReagents(ARCANE_BRILLIANCE))
     {
-        //DEBUG_LOG("Buffed, exiting");
+        if (Buff(&PlayerbotMageAI::BuffHelper, ARCANE_BRILLIANCE) & RETURN_CONTINUE)
+            return;
+    }
+    else if (Buff(&PlayerbotMageAI::BuffHelper, ARCANE_INTELLECT, JOB_MANAONLY) & RETURN_CONTINUE)
         return;
-    }//DEBUG_LOG("Didn't buff. Woot!");
-
-    // conjure food & water + hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+    //DEBUG_LOG("Didn't buff. Woot!");
 
     // TODO: The beauty of a mage is not only its ability to supply itself with water, but to share its water
     // So, conjure at *least* 1.25 stacks, ready to trade a stack and still have some left for self

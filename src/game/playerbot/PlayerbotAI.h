@@ -2,10 +2,10 @@
 #define _PLAYERBOTAI_H
 
 #include "Common.h"
-#include "Quests/QuestDef.h"
-#include "GameEvents/GameEventMgr.h"
-#include "Entities/ObjectGuid.h"
-#include "Entities/Unit.h"
+#include "../Quests/QuestDef.h"
+#include "../GameEvents/GameEventMgr.h"
+#include "../Entities/ObjectGuid.h"
+#include "../Entities/Unit.h"
 
 class WorldPacket;
 class WorldObject;
@@ -1405,6 +1405,51 @@ enum TalentSpecPurpose
     TSP_PVP_ALL                     = 0xFFFF0000   // Highly recommend AGAINST using this
 };
 
+enum ManaPotionsId
+{
+    MINOR_MANA_POTION                   = 15715,
+    LESSER_MANA_POTION                  = 15716,
+    MANA_POTION                         = 15717,
+    GREATER_MANA_POTION                 = 15718,
+    SUPERIOR_MANA_POTION                = 24151,
+    MAJOR_MANA_POTION                   = 21672,
+    SUPER_MANA_POTION                   = 37808,
+    UNSTABLE_MANA_POTION                = 23731,
+    FEL_MANA_POTION                     = 44295,
+    CRYSTAL_MANA_POTION                 = 47133,
+    AUCHENAI_MANA_POTION                = 37808,
+    MINOR_REJUVENATION_POTION           = 2345,
+    MAJOR_REJUVENATION_POTION           = 18253
+};
+
+enum ManaRunesId
+{
+    DEMONIC_RUNE                        = 22952,
+    DARK_RUNE                           = 32905
+};
+
+enum HealingItemDisplayId
+{
+    MAJOR_HEALING_POTION                = 24152,
+    WHIPPER_ROOT_TUBER                  = 21974,
+    NIGHT_DRAGON_BREATH                 = 21975,
+    LIMITED_INVULNERABILITY_POTION      = 24213,
+    GREATER_DREAMLESS_SLEEP_POTION      = 17403,
+    SUPERIOR_HEALING_POTION             = 15714,
+    CRYSTAL_RESTORE                     = 2516,
+    DREAMLESS_SLEEP_POTION              = 17403,
+    GREATER_HEALING_POTION              = 15713,
+    HEALING_POTION                      = 15712,
+    LESSER_HEALING_POTION               = 15711,
+    DISCOLORED_HEALING_POTION           = 15736,
+    MINOR_HEALING_POTION                = 15710,
+    VOLATILE_HEALING_POTION             = 24212,
+    SUPER_HEALING_POTION                = 37807,
+    CRYSTAL_HEALING_POTION              = 47132,
+    FEL_REGENERATION_POTION             = 37864,
+    MAJOR_DREAMLESS_SLEEP_POTION        = 37845,
+};
+
 enum MainSpec
 {
     MAGE_SPEC_FIRE              = 41,
@@ -1739,6 +1784,11 @@ public:
     void ClearActiveTalentSpec() { m_activeTalentSpec.specName = ""; m_activeTalentSpec.specClass = 0; m_activeTalentSpec.specPurpose = TSP_NONE; for (int i = 0; i < 71; i++) m_activeTalentSpec.talentId[i] = 0; for (int i = 0; i < 3; i++) { m_activeTalentSpec.glyphIdMajor[i] = 0; m_activeTalentSpec.glyphIdMinor[i] = 0; } }
     void SetActiveTalentSpec(TalentSpec ts) { m_activeTalentSpec = ts; }
     bool ApplyActiveTalentSpec();
+    bool IsElite(Unit* pTarget, bool isWorldBoss = false) const;
+    // Used by bots to check if their target is neutralized (polymorph, shackle or the like). Useful to avoid breaking crowd control
+    bool IsNeutralized(Unit* pTarget);
+    // Make the bots face their target
+    void FaceTarget(Unit* pTarget);
 
     void MakeSpellLink(const SpellEntry *sInfo, std::ostringstream &out);
     void MakeWeaponSkillLink(const SpellEntry *sInfo, std::ostringstream &out, uint32 skillid);
@@ -1785,6 +1835,7 @@ public:
     Item* FindKeyForLockValue(uint32 reqSkillValue);
     Item* FindBombForLockValue(uint32 reqSkillValue);
     Item* FindConsumable(uint32 displayId) const;
+    Item* FindManaRegenItem() const;
     bool  FindAmmo() const;
     uint8 _findItemSlot(Item* target);
     bool CanStore();
@@ -1809,6 +1860,8 @@ public:
     void UseItem(Item *item, uint8 targetInventorySlot);
     void UseItem(Item *item, Unit *target);
     void UseItem(Item *item);
+
+    void TryEmergency(Unit* pAttacker);
 
     void PlaySound(uint32 soundid);
     void Announce(AnnounceFlags msg);
@@ -1839,7 +1892,6 @@ public:
     void AutoEquipComparison(Item *pItem, Item *pItem2);
     bool EquipPrototypeComparison(const ItemPrototype *pProtoItem, const ItemPrototype *pProtoItem2);
     bool ItemStatComparison(const ItemPrototype *pProto, const ItemPrototype *pProto2);
-    void Feast();
     void InterruptCurrentCastingSpell();
     void Attack(Unit* forcedTarget = nullptr);
     void GetCombatTarget(Unit* forcedTarget = 0);
@@ -1886,6 +1938,7 @@ public:
     void MakeQuestLink(Quest const* quest, std::ostringstream &out);
 
     bool IsInCombat();
+    bool IsRegenerating();
     bool IsGroupInCombat();
     Player* GetGroupTank(); // TODO: didn't want to pollute non-playerbot code but this should really go in group.cpp
     Player* GetGroupHealer(); // TODO: didn't want to pollute non-playerbot code but this should really go in group.cpp
@@ -1896,6 +1949,7 @@ public:
     bool CanPull(Player &fromPlayer);
     bool CastPull();
     bool GroupTankHoldsAggro();
+    bool CastNeutralize();
     void UpdateAttackerInfo();
     Unit* FindAttacker(ATTACKERINFOTYPE ait = AIT_NONE, Unit *victim = 0);
     uint32 GetAttackerCount() { return m_attackerInfo.size(); };
@@ -1953,6 +2007,7 @@ private:
     void _HandleCommandStay(std::string &text, Player &fromPlayer);
     void _HandleCommandAttack(std::string &text, Player &fromPlayer);
     void _HandleCommandPull(std::string &text, Player &fromPlayer);
+    void _HandleCommandNeutralize(std::string &text, Player &fromPlayer);
     void _HandleCommandCast(std::string &text, Player &fromPlayer);
     void _HandleCommandSell(std::string &text, Player &fromPlayer);
     void _HandleCommandBuy(std::string &text, Player &fromPlayer);

@@ -1,6 +1,7 @@
 // an improved Hunter by rrtn & Runsttren :)
 #include "PlayerbotHunterAI.h"
 #include "PlayerbotMgr.h"
+#include "../Spells/SpellAuras.h"
 
 class PlayerbotAI;
 
@@ -315,6 +316,24 @@ CombatManeuverReturns PlayerbotHunterAI::DoNextCombatManeuverPVP(Unit* pTarget)
     return DoNextCombatManeuverPVE(pTarget); // TODO: bad idea perhaps, but better than the alternative
 }
 
+bool PlayerbotHunterAI::IsTargetEnraged(Unit* pTarget)
+{
+    if (!m_ai)  return false;
+    if (!m_bot) return false;
+    if (!pTarget) return false;
+
+    Unit::SpellAuraHolderMap const& auras = pTarget->GetSpellAuraHolderMap();
+    for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
+    {
+        SpellAuraHolder *holder = itr->second;
+        // Return true is target unit has aura with DISPEL_ENRAGE dispel type
+        if ((1 << holder->GetSpellProto()->Dispel) & GetDispellMask(DISPEL_ENRAGE))
+            return true;
+    }
+
+    return false;
+}
+
 void PlayerbotHunterAI::DoNonCombatActions()
 {
     if (!m_ai)  return;
@@ -335,9 +354,6 @@ void PlayerbotHunterAI::DoNonCombatActions()
         m_ai->CastSpell(ASPECT_OF_THE_HAWK, *m_bot);
 
     // hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-
     if (EatDrinkBandage())
         return;
 

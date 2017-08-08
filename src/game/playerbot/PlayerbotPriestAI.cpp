@@ -1,5 +1,5 @@
 #include "PlayerbotPriestAI.h"
-#include "Spells/SpellAuras.h"
+#include "../Spells/SpellAuras.h"
 
 class PlayerbotAI;
 
@@ -455,28 +455,31 @@ void PlayerbotPriestAI::DoNonCombatActions()
             return;// RETURN_CONTINUE;
     }
 
-    // Buff
-    if (m_bot->GetGroup())
+    // Buffing
+    // the check for group targets is performed by NeedGroupBuff (if group is found for bots by the function)
+    if (NeedGroupBuff(PRAYER_OF_FORTITUDE, POWER_WORD_FORTITUDE) && m_ai->HasSpellReagents(PRAYER_OF_FORTITUDE))
     {
-        if (PRAYER_OF_FORTITUDE && m_ai->In_Reach(m_bot,PRAYER_OF_FORTITUDE) && m_ai->HasSpellReagents(PRAYER_OF_FORTITUDE) && m_ai->Buff(PRAYER_OF_FORTITUDE, m_bot))
-            return;
-
-        if (PRAYER_OF_SPIRIT && m_ai->In_Reach(m_bot,PRAYER_OF_SPIRIT) && m_ai->HasSpellReagents(PRAYER_OF_SPIRIT) && m_ai->Buff(PRAYER_OF_SPIRIT, m_bot))
-            return;
-
-        if (PRAYER_OF_SHADOW_PROTECTION && m_ai->In_Reach(m_bot,PRAYER_OF_SHADOW_PROTECTION) && m_ai->HasSpellReagents(PRAYER_OF_SHADOW_PROTECTION) && m_ai->Buff(PRAYER_OF_SHADOW_PROTECTION, m_bot))
+        if (Buff(&PlayerbotPriestAI::BuffHelper, PRAYER_OF_FORTITUDE) & RETURN_CONTINUE)
             return;
     }
-    if (Buff(&PlayerbotPriestAI::BuffHelper, POWER_WORD_FORTITUDE) & RETURN_CONTINUE)
-        return;
-    if (Buff(&PlayerbotPriestAI::BuffHelper, DIVINE_SPIRIT, (JOB_ALL | JOB_MANAONLY)) & RETURN_CONTINUE)
-        return;
-    if (Buff(&PlayerbotPriestAI::BuffHelper, SHADOW_PROTECTION, (JOB_TANK | JOB_HEAL)) & RETURN_CONTINUE)
+    else if (Buff(&PlayerbotPriestAI::BuffHelper, POWER_WORD_FORTITUDE) & RETURN_CONTINUE)
         return;
 
-    // hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+    if (NeedGroupBuff(PRAYER_OF_SPIRIT, DIVINE_SPIRIT) && m_ai->HasSpellReagents(PRAYER_OF_FORTITUDE))
+    {
+        if (Buff(&PlayerbotPriestAI::BuffHelper, PRAYER_OF_SPIRIT) & RETURN_CONTINUE)
+            return;
+    }
+    else if (Buff(&PlayerbotPriestAI::BuffHelper, DIVINE_SPIRIT, (JOB_ALL | JOB_MANAONLY)) & RETURN_CONTINUE)
+        return;
+
+    if (NeedGroupBuff(PRAYER_OF_SHADOW_PROTECTION, SHADOW_PROTECTION) && m_ai->HasSpellReagents(PRAYER_OF_FORTITUDE))
+    {
+        if (m_ai->GetCombatOrder() & PlayerbotAI::ORDERS_RESIST_SHADOW && Buff(&PlayerbotPriestAI::BuffHelper, PRAYER_OF_SHADOW_PROTECTION) & RETURN_CONTINUE)
+            return;
+    }
+    else if (m_ai->GetCombatOrder() & PlayerbotAI::ORDERS_RESIST_SHADOW && Buff(&PlayerbotPriestAI::BuffHelper, SHADOW_PROTECTION) & RETURN_CONTINUE)
+        return;
 
     if (EatDrinkBandage())
         return;
@@ -489,7 +492,10 @@ bool PlayerbotPriestAI::BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *target
     if (!ai)          return false;
     if (spellId == 0) return false;
     if (!target)      return false;
-    //DEBUG_LOG("..Sanity checks passed");
+
+    Pet * pet = target->GetPet();
+    if (pet && !pet->HasAuraType(SPELL_AURA_MOD_UNATTACKABLE) && ai->Buff(spellId, pet))
+        return true;
 
     if (ai->Buff(spellId, target))
     {

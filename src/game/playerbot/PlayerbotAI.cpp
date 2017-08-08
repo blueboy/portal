@@ -1,14 +1,14 @@
 #include <stdarg.h>
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "Entities/ItemPrototype.h"
-#include "World/World.h"
-#include "Spells/SpellMgr.h"
-#include "Grids/GridNotifiers.h"
-#include "Grids/GridNotifiersImpl.h"
-#include "Grids/CellImpl.h"
+#include "../Entities/ItemPrototype.h"
+#include "../World/World.h"
+#include "../Spells/SpellMgr.h"
+#include "../Grids/GridNotifiers.h"
+#include "../Grids/GridNotifiersImpl.h"
+#include "../Grids/CellImpl.h"
 #include "ProgressBar.h"
-#include "Chat/Chat.h"
+#include "../Chat/Chat.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
 #include "PlayerbotDeathKnightAI.h"
@@ -21,22 +21,22 @@
 #include "PlayerbotShamanAI.h"
 #include "PlayerbotWarlockAI.h"
 #include "PlayerbotWarriorAI.h"
-#include "Entities/Player.h"
-#include "Globals/ObjectMgr.h"
+#include "../Entities/Player.h"
+#include "../Globals/ObjectMgr.h"
 #include "WorldPacket.h"
-#include "Spells/Spell.h"
-#include "Entities/Unit.h"
-#include "Spells/SpellAuras.h"
-#include "Globals/SharedDefines.h"
+#include "../Spells/Spell.h"
+#include "../Entities/Unit.h"
+#include "../Spells/SpellAuras.h"
+#include "../Globals/SharedDefines.h"
 #include "Log.h"
-#include "Entities/GossipDef.h"
-#include "MotionGenerators/MotionMaster.h"
-#include "AuctionHouse/AuctionHouseMgr.h"
-#include "Mails/Mail.h"
-#include "Guilds/Guild.h"
-#include "Guilds/GuildMgr.h"
-#include "Tools/Language.h"
-#include "Loot/LootMgr.h"
+#include "../Entities/GossipDef.h"
+#include "../MotionGenerators/MotionMaster.h"
+#include "../AuctionHouse/AuctionHouseMgr.h"
+#include "../Mails/Mail.h"
+#include "../Guilds/Guild.h"
+#include "../Guilds/GuildMgr.h"
+#include "../Tools/Language.h"
+#include "../Loot/LootMgr.h"
 #include <iomanip>
 #include <iostream>
 
@@ -327,10 +327,6 @@ uint32 PlayerbotAI::initSpell(uint32 spellId)
     SpellChainMapNext const& nextMap = sSpellMgr.GetSpellChainNext();
     for (SpellChainMapNext::const_iterator itr = nextMap.lower_bound(spellId); itr != nextMap.upper_bound(spellId); ++itr)
     {
-        // Work around buggy chains
-        if (sSpellTemplate.LookupEntry<SpellEntry>(spellId)->SpellIconID != sSpellTemplate.LookupEntry<SpellEntry>(itr->second)->SpellIconID)
-            continue;
-
         SpellChainNode const* node = sSpellMgr.GetSpellChainNode(itr->second);
         // If next spell is a requirement for this one then skip it
         if (node->req == spellId)
@@ -344,7 +340,7 @@ uint32 PlayerbotAI::initSpell(uint32 spellId)
     if (next == 0)
     {
         const SpellEntry* const pSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
-        // DEBUG_LOG ("[PlayerbotAI]: initSpell - Playerbot spell init: %s is %u", pSpellInfo->SpellName[0], spellId);
+        DEBUG_LOG ("[PlayerbotAI]: initSpell - Playerbot spell init: %s is %u", pSpellInfo->SpellName[0], spellId);
 
         // Add spell to spellrange map
         Spell *spell = new Spell(m_bot, pSpellInfo, false);
@@ -1556,9 +1552,9 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             if (canObeyCommandFrom(*pPlayer))
             {
                 m_bot->GetMotionMaster()->Clear(true);
-                WorldPacket* const packet = new WorldPacket(CMSG_DUEL_ACCEPTED, 8);
+                std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_DUEL_ACCEPTED, 8));
                 *packet << flagGuid;
-                m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+                m_bot->GetSession()->QueuePacket(std::move(packet)); // queue the packet to get around race condition
 
                 // follow target in casting range
                 float angle = rand_float(0, M_PI_F);
@@ -2343,10 +2339,10 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 ObjectGuid guid;
                 p >> guid;
 
-                WorldPacket* const packet = new WorldPacket(CMSG_RESURRECT_RESPONSE, 8 + 1);
+                std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_RESURRECT_RESPONSE, 8 + 1));
                 *packet << guid;
                 *packet << uint8(1);                        // accept
-                m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+                m_bot->GetSession()->QueuePacket(std::move(packet));   // queue the packet to get around race condition
 
                 // set back to normal
                 SetState(BOTSTATE_NORMAL);
@@ -2497,10 +2493,10 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             p.read_skip<uint8>();    // Rolltype related to SMSG_LOOT_ROLL
 
             Loot* loot = sLootMgr.GetLoot(m_bot, co_guid);
-            
+
             if (!loot)
                 return;
-            
+
             // Clean up: remove target guid from (ignore list)
             for (std::list<ObjectGuid>::iterator itr = m_being_rolled_on.begin(); itr != m_being_rolled_on.end();)
                 if (co_guid == *itr)
@@ -3048,6 +3044,50 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
     return nullptr;
 }
 
+static const uint32 uPriorizedManaPotionIds[12] =
+{
+    FEL_MANA_POTION, CRYSTAL_MANA_POTION, SUPER_MANA_POTION, UNSTABLE_MANA_POTION, 
+    MAJOR_MANA_POTION, MAJOR_REJUVENATION_POTION, SUPERIOR_MANA_POTION,
+    GREATER_MANA_POTION, MANA_POTION, LESSER_MANA_POTION,
+    MINOR_MANA_POTION, MINOR_REJUVENATION_POTION
+};
+
+/**
+ * FindManaRegenItem()
+ * return Item* Returns items like runes or potion that can help the bot to instantly resplenish some of its mana
+ *
+ * return nullptr if no relevant item is found in bot inventory, else return a consumable item providing mana
+ *
+ */
+Item* PlayerbotAI::FindManaRegenItem() const
+{
+    Item* manaRegen;
+    // If bot has enough health, try to use a Demonic or Dark Rune
+    // to avoid triggering the health potion cooldown with a mana potion
+    if (m_bot->GetHealth() > 1500)
+    {
+        // First try a Demonic Rune as they are BoP
+        manaRegen = FindConsumable(DEMONIC_RUNE);
+        if (manaRegen)
+            return manaRegen;
+        else
+        {
+            manaRegen = FindConsumable(DARK_RUNE);
+            if (manaRegen)
+                return manaRegen;
+        }
+    }
+    // Else use mana potion (and knowingly trigger the health potion cooldown)
+    for (uint8 i = 0; i < countof(uPriorizedManaPotionIds); ++i)
+    {
+        manaRegen = FindConsumable(uPriorizedManaPotionIds[i]);
+        if (manaRegen)
+            return manaRegen;
+    }
+
+    return nullptr;
+}
+
 bool PlayerbotAI::FindAmmo() const
 {
     for (int i = EQUIPMENT_SLOT_START; i < INVENTORY_SLOT_ITEM_END; ++i)
@@ -3089,62 +3129,12 @@ bool PlayerbotAI::FindAmmo() const
 
 void PlayerbotAI::InterruptCurrentCastingSpell()
 {
-    //TellMaster("I'm interrupting my current spell!");
-    WorldPacket* const packet = new WorldPacket(CMSG_CANCEL_CAST, 5);  //changed from thetourist suggestion
+    // TellMaster("I'm interrupting my current spell!");
+    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_CANCEL_CAST, 5));  //changed from thetourist suggestion
     *packet << m_CurrentlyCastingSpellId;
     *packet << m_targetGuidCommand;   //changed from thetourist suggestion
     m_CurrentlyCastingSpellId = 0;
-    m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
-}
-
-void PlayerbotAI::Feast()
-{
-    // stand up if we are done feasting
-    if (!(m_bot->GetHealth() < m_bot->GetMaxHealth() || (m_bot->GetPowerType() == POWER_MANA && m_bot->GetPower(POWER_MANA) < m_bot->GetMaxPower(POWER_MANA))))
-    {
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-        return;
-    }
-
-    // wait 3 seconds before checking if we need to drink more or eat more
-    SetIgnoreUpdateTime(3);
-
-    // should we drink another
-    if (m_bot->GetPowerType() == POWER_MANA && CurrentTime() > m_TimeDoneDrinking
-        && ((static_cast<float> (m_bot->GetPower(POWER_MANA)) / m_bot->GetMaxPower(POWER_MANA)) < 0.8))
-    {
-        Item* pItem = FindDrink();
-        if (pItem != nullptr)
-        {
-            TellMaster("drinking %s now...",pItem->GetProto()->Name1);
-            UseItem(pItem);
-            m_TimeDoneDrinking = CurrentTime() + 30;
-            return;
-        }
-        TellMaster("I need water.");
-    }
-
-    // should we eat another
-    if (CurrentTime() > m_TimeDoneEating && ((static_cast<float> (m_bot->GetHealth()) / m_bot->GetMaxHealth()) < 0.8))
-    {
-        Item* pItem = FindFood();
-        if (pItem != nullptr)
-        {
-            TellMaster("eating %s now...",pItem->GetProto()->Name1);
-            UseItem(pItem);
-            m_TimeDoneEating = CurrentTime() + 30;
-            return;
-        }
-        TellMaster("I need food.");
-    }
-
-    // if we are no longer eating or drinking
-    // because we are out of items or we are above 80% in both stats
-    if (CurrentTime() > m_TimeDoneEating && CurrentTime() > m_TimeDoneDrinking)
-    {
-        TellMaster("done feasting!");
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-    }
+    m_bot->GetSession()->QueuePacket(std::move(packet));
 }
 
 // intelligently sets a reasonable combat order for this bot
@@ -3359,8 +3349,8 @@ void PlayerbotAI::DoCombatMovement()
              && m_movementOrder != MOVEMENT_STAY
              && GetClassAI()->GetWaitUntil() == 0 ) // Not waiting
     {
-        // ranged combat - just move within spell range
-        if (!CanReachWithSpellAttack(m_targetCombat))
+        // ranged combat - just move within spell range if bot does not have heal orders
+        if (!CanReachWithSpellAttack(m_targetCombat) && !IsHealer())
         {
             m_bot->GetMotionMaster()->Clear(false);
             m_bot->GetMotionMaster()->MoveChase(m_targetCombat);
@@ -3649,6 +3639,39 @@ bool PlayerbotAI::GroupTankHoldsAggro()
     return true;
 }
 
+// Wrapper for the UpdateAI cast subfunction
+// Each bot class neutralize function will return a spellId
+// depending on the creatureType of the target
+bool PlayerbotAI::CastNeutralize()
+{
+    if (!m_bot) return false;
+    if (!GetClassAI()) return false;
+    if (!m_targetGuidCommand) return false;
+
+    Unit* pTarget = ObjectAccessor::GetUnit(*m_bot, m_targetGuidCommand);
+    if (!pTarget) return false;
+
+    Creature * pCreature = (Creature*) pTarget;
+    if (!pCreature) return false;
+
+    // Define the target's creature type, so the bot AI will now if
+    // it can neutralize it
+    uint8 creatureType = 0;
+    creatureType = pCreature->GetCreatureInfo()->CreatureType;
+
+    switch (m_bot->getClass())
+    {
+        default:
+            return false;
+    }
+
+    // A spellId was found
+    if (m_spellIdCommand != 0)
+        return true;
+
+    return false;
+}
+
 void PlayerbotAI::SetQuestNeedCreatures()
 {
     // reset values first
@@ -3898,11 +3921,11 @@ void PlayerbotAI::DoLoot()
             if (c->HasFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_LOOTABLE) && !c->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
             {
                 // loot the creature
-                WorldPacket* const packet = new WorldPacket(CMSG_LOOT, 8);
+                std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_LOOT, 8));
                 *packet << m_lootCurrent;
-                m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+                m_bot->GetSession()->QueuePacket(std::move(packet));
                 return; // no further processing is needed
-                // m_lootCurrent is reset in SMSG_LOOT_RELEASE_RESPONSE after checking for skinloot
+                // m_lootCurrent is reset in SMSG_LOOT_RESPONSE/SMSG_LOOT_RELEASE_RESPONSE
             }
             else if (c->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
                 // not all creature skins are leather, some are ore or herb
@@ -4309,6 +4332,23 @@ bool PlayerbotAI::IsInCombat()
     return inCombat;
 }
 
+bool PlayerbotAI::IsRegenerating()
+{
+    Unit::SpellAuraHolderMap& auras = m_bot->GetSpellAuraHolderMap();
+    for (Unit::SpellAuraHolderMap::iterator aura = auras.begin(); aura != auras.end(); aura++)
+    {
+        SpellEntry const* spell = aura->second->GetSpellProto();
+        if (!spell)
+            continue;
+        if (spell->Category == 59 || spell->Category == 11){
+            return true;
+        }
+    }
+    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
+        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
+    return false;
+}
+
 void PlayerbotAI::UpdateAttackersForTarget(Unit *victim)
 {
     HostileReference *ref = victim->getHostileRefManager().getFirst();
@@ -4658,12 +4698,14 @@ void PlayerbotAI::SetCombatOrder(CombatOrderType co, Unit* target)
     if ((co & ORDERS_PRIMARY))
     {
         m_combatOrder = (CombatOrderType) (((uint32) m_combatOrder & (uint32) ORDERS_SECONDARY) | (uint32) co);
-        CharacterDatabase.DirectPExecute("UPDATE playerbot_saved_data SET combat_order = '%u', primary_target = '%u', pname = '%s' WHERE guid = '%u'", (m_combatOrder & ~ORDERS_TEMP), gTempTarget, gname.c_str(), m_bot->GetGUIDLow());
+        if (target)
+            CharacterDatabase.DirectPExecute("UPDATE playerbot_saved_data SET combat_order = '%u', primary_target = '%u', pname = '%s' WHERE guid = '%u'", (m_combatOrder & ~ORDERS_TEMP), gTempTarget, gname.c_str(), m_bot->GetGUIDLow());
     }
     else
     {
-        m_combatOrder = (CombatOrderType) ((uint32) m_combatOrder | (uint32) co);
-        CharacterDatabase.DirectPExecute("UPDATE playerbot_saved_data SET combat_order = '%u', secondary_target = '%u', sname = '%s' WHERE guid = '%u'", (m_combatOrder & ~ORDERS_TEMP), gTempTarget, gname.c_str(), m_bot->GetGUIDLow());
+        m_combatOrder = (CombatOrderType)((uint32)m_combatOrder | (uint32)co);
+        if (target)
+            CharacterDatabase.DirectPExecute("UPDATE playerbot_saved_data SET combat_order = '%u', secondary_target = '%u', sname = '%s' WHERE guid = '%u'", (m_combatOrder & ~ORDERS_TEMP), gTempTarget, gname.c_str(), m_bot->GetGUIDLow());
     }
 }
 
@@ -5228,7 +5270,7 @@ void PlayerbotAI::UpdateAI(const uint32 /*p_time*/)
         return MovementReset();
 
     // do class specific non combat actions
-    if (GetClassAI() && !m_bot->IsMounted())
+    if (GetClassAI() && !m_bot->IsMounted() && !IsRegenerating())
     {
         GetClassAI()->DoNonCombatActions();
 
@@ -5514,7 +5556,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId)
         }
     }
 
-    SetIgnoreUpdateTime(CastTime + 1);
+    // Some casting times are negative so set ignore update time to 1 sec to avoid stucking the bot AI
+    SetIgnoreUpdateTime(std::max(CastTime, 0.0f) + 1);
+
     return true;
 }
 
@@ -7604,6 +7648,76 @@ void PlayerbotAI::GiveLevel(uint32 /*level*/)
     ApplyActiveTalentSpec();
 }
 
+/**
+ * IsElite()
+ * Playerbot wrapper to know if a target is elite or not. This is used by the AI to switch from one action to another
+ * return bool Returns true if bot's target is a creature with elite rank (elite rare, elite, worldboss)
+ *
+ * params:pTarget Unit* the target to check if it is elite
+ * params:isWorldBoss bool if true, the function will return true only if the target is a worldboss. This allow to enable specific code if the target is a worldboss
+ * return false if the target is not elite/rare elite/worldboss or if isWorldBoss was provided as true and that the target is not a worldboss
+ *
+ */
+bool PlayerbotAI::IsElite(Unit* pTarget, bool isWorldBoss) const
+{
+    if (!pTarget)
+        return false;
+
+    if (Creature * pCreature = (Creature*) pTarget)
+    {
+        if (isWorldBoss)
+            return pCreature->IsWorldBoss();
+        else
+            return (pCreature->IsElite() || pCreature->IsWorldBoss());
+    }
+
+    return false;
+}
+
+// Check if bot target has one of the following auras: Sap, Polymorph, Shackle Undead, Banish, Seduction, Freezing Trap, Hibernate
+// This is used by the AI to prevent bots from attacking crowd control targets
+
+static const uint32 uAurasIds[21] =
+{
+    118, 12824, 12825, 12826,   // polymorph
+    28272, 28271,               // polymorph pig, turtle
+    9484, 9485, 10955,          // shackle
+    6358,                       // seduction
+    710, 18647,                 // banish
+    6770, 2070, 11297,          // sap
+    3355, 14308, 14309,         // freezing trap (effect auras IDs, not spell IDs)
+    2637, 18657, 18658          // hibernate
+};
+
+bool PlayerbotAI::IsNeutralized(Unit* pTarget)
+{
+    if (!pTarget)
+        return false;
+
+    for (uint8 i = 0; i < countof(uAurasIds); ++i)
+    {
+        if (pTarget->HasAura(uAurasIds[i], EFFECT_INDEX_0))
+            return true;
+    }
+
+    return false;
+}
+
+// Utility function to make the bots face their target
+// Useful to ensure bots can cast spells/abilities
+// without getting facing target errors
+void PlayerbotAI::FaceTarget(Unit* pTarget)
+{
+    if (!pTarget)
+        return;
+
+    // Only update orientation if not already facing target
+    if (!m_bot->HasInArc(M_PI_F, pTarget))
+        m_bot->SetFacingTo(m_bot->GetAngle(pTarget));
+
+    return;
+}
+
 bool PlayerbotAI::CanStore()
 {
     uint32 totalused = 0;
@@ -7678,11 +7792,11 @@ void PlayerbotAI::UseItem(Item *item, uint32 targetFlag, ObjectGuid targetGUID)
         if (qInfo)
         {
             m_bot->GetMotionMaster()->Clear(true);
-            WorldPacket* const packet = new WorldPacket(CMSG_QUESTGIVER_ACCEPT_QUEST, 8 + 4 + 4);
+            std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_QUESTGIVER_ACCEPT_QUEST, 8 + 4 + 4));
             *packet << item_guid;
             *packet << questid;
             *packet << uint32(0);
-            m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+            m_bot->GetSession()->QueuePacket(std::move(packet)); // queue the packet to get around race condition
             report << "|cffffff00Quest taken |r" << qInfo->GetTitle();
             TellMaster(report.str());
         }
@@ -7702,21 +7816,21 @@ void PlayerbotAI::UseItem(Item *item, uint32 targetFlag, ObjectGuid targetGUID)
     if (item->GetProto()->Flags & ITEM_FLAG_HAS_LOOT && spellId == 0)
     {
         // Open quest item in inventory, containing related items (e.g Gnarlpine necklace, containing Tallonkai's Jewel)
-        WorldPacket* const packet = new WorldPacket(CMSG_OPEN_ITEM, 2);
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_OPEN_ITEM, 2));
         *packet << item->GetBagSlot();
         *packet << item->GetSlot();
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet)); // queue the packet to get around race condition
         return;
     }
 
-    WorldPacket *packet = new WorldPacket(CMSG_USE_ITEM, 28);
+    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_USE_ITEM, 28));
     *packet << bagIndex << slot << cast_count << spellId << item_guid
         << glyphIndex << unk_flags << targetFlag;
 
     if (targetFlag & (TARGET_FLAG_UNIT | TARGET_FLAG_ITEM | TARGET_FLAG_OBJECT))
         *packet << targetGUID.WriteAsPacked();
 
-    m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+    m_bot->GetSession()->QueuePacket(std::move(packet));
 
     SpellEntry const * spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
     if (!spellInfo)
@@ -7742,6 +7856,53 @@ void PlayerbotAI::UseItem(Item *item, uint32 targetFlag, ObjectGuid targetGUID)
     }
     else
         SetIgnoreUpdateTime(castTime);
+}
+
+static const uint32 uPriorizedHealingItemIds[19] =
+{
+    HEALTHSTONE_DISPLAYID, FEL_REGENERATION_POTION, SUPER_HEALING_POTION, CRYSTAL_HEALING_POTION, MAJOR_DREAMLESS_SLEEP_POTION, VOLATILE_HEALING_POTION,
+    MAJOR_HEALING_POTION, WHIPPER_ROOT_TUBER, NIGHT_DRAGON_BREATH, LIMITED_INVULNERABILITY_POTION, GREATER_DREAMLESS_SLEEP_POTION,
+    SUPERIOR_HEALING_POTION, CRYSTAL_RESTORE, DREAMLESS_SLEEP_POTION, GREATER_HEALING_POTION, HEALING_POTION, LESSER_HEALING_POTION, DISCOLORED_HEALING_POTION, MINOR_HEALING_POTION,
+};
+
+/**
+ * TryEmergency()
+ * Playerbot function to select an item that the bot will use to heal itself on low health without waiting for a heal from a healer
+ *
+ * params:pAttacker Unit* the creature that is attacking the bot
+ * return nothing
+ */
+void PlayerbotAI::TryEmergency(Unit* pAttacker)
+{
+    // Do not use consumable if bot can heal self
+    if (IsHealer() && GetManaPercent() > 20)
+        return;
+
+    // If bot does not have aggro: use bandage instead of potion/stone/crystal
+    if (!pAttacker && !m_bot->HasAura(11196)) // Recently bandaged
+    {
+        Item* bandage = FindBandage();
+        if (bandage)
+        {
+            SetIgnoreUpdateTime(8);
+            UseItem(bandage);
+            return;
+        }
+    }
+
+    // Else loop over the list of health consumable to pick one
+    Item* healthItem;
+    for (uint8 i = 0; i < countof(uPriorizedHealingItemIds); ++i)
+    {
+        healthItem = FindConsumable(uPriorizedHealingItemIds[i]);
+        if (healthItem)
+        {
+            UseItem(healthItem);
+            return;
+        }
+    }
+
+    return;
 }
 
 // submits packet to use an item
@@ -7849,10 +8010,10 @@ bool PlayerbotAI::TradeItem(const Item& item, int8 slot)
 
         if (tradeSlot == -1) return false;
 
-        WorldPacket* const packet = new WorldPacket(CMSG_SET_TRADE_ITEM, 3);
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_SET_TRADE_ITEM, 3));
         *packet << (uint8) tradeSlot << (uint8) item.GetBagSlot()
             << (uint8) item.GetSlot();
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet));
         return true;
 }
 
@@ -7861,9 +8022,9 @@ bool PlayerbotAI::TradeCopper(uint32 copper)
 {
     if (copper > 0)
     {
-        WorldPacket* const packet = new WorldPacket(CMSG_SET_TRADE_GOLD, 4);
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_SET_TRADE_GOLD, 4));
         *packet << copper;
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet));
         return true;
     }
     return false;
@@ -7956,18 +8117,18 @@ void PlayerbotAI::_doSellItem(Item* const item, std::ostringstream &report, std:
         return;
 
     uint8 autosell = 0;
+    ItemPrototype const *pProto = item->GetProto();
 
     std::ostringstream mout;
-    if (item->CanBeTraded() && item->GetProto()->Quality == ITEM_QUALITY_POOR) // trash sells automatically.
+    if (item->CanBeTraded() && pProto->Quality == ITEM_QUALITY_POOR) // trash sells automatically.
         autosell = 1;
     if (SellWhite == 1) // set this with the command 'sell all'
     {
         // here we'll do some checks for other items that are safe to automatically sell such as
         // white items that are a number of levels lower than anything we could possibly use.
         // We'll check to make sure its not a tradeskill tool, quest item etc, things that we don't want to lose.
-        if (item->GetProto()->SellPrice > 0 && (item->GetProto()->Quality == ITEM_QUALITY_NORMAL || item->GetProto()->Quality == ITEM_QUALITY_UNCOMMON) && item->GetProto()->SubClass != ITEM_SUBCLASS_QUEST)
+        if (pProto->SellPrice > 0 && (pProto->Quality == ITEM_QUALITY_NORMAL || pProto->Quality == ITEM_QUALITY_UNCOMMON) && pProto->SubClass != ITEM_SUBCLASS_QUEST)
         {
-            ItemPrototype const *pProto = item->GetProto();
             if (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr->gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
             {
                 if (pProto->Class == ITEM_CLASS_WEAPON)
@@ -7984,10 +8145,28 @@ void PlayerbotAI::_doSellItem(Item* const item, std::ostringstream &report, std:
 
     if (autosell == 1) // set this switch above and this item gets sold automatically. Only set this for automatic sales e.g junk etc.
     {
-        uint32 cost = item->GetCount() * item->GetProto()->SellPrice;
-        m_bot->ModifyMoney(cost);
+
+
+        uint32 cost = pProto->SellPrice * item->GetCount();
+
+        // handle spell charge if any
+        for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+        {
+            auto const &spell = pProto->Spells[i];
+
+            // if spell charges for this item are negative, it means that the item should be destroyed once the charges are consumed.
+            // it also means that the value of this item is relative to how many charges are remaining.
+            if (spell.SpellId != 0 && spell.SpellCharges < 0)
+            {
+                auto const multiplier = static_cast<float>(item->GetSpellCharges(i)) / spell.SpellCharges;
+                cost *= multiplier;
+                break;
+            }
+        }
+
         m_bot->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
         m_bot->AddItemToBuyBackSlot(item, cost);
+        m_bot->ModifyMoney(cost);
 
         ++TotalSold;
         TotalCost += cost;
@@ -7996,7 +8175,7 @@ void PlayerbotAI::_doSellItem(Item* const item, std::ostringstream &report, std:
         MakeItemLink(item, report, true);
         report << " for " << Cash(cost);
     }
-    else if (item->GetProto()->SellPrice > 0)
+    else if (pProto->SellPrice > 0)
         MakeItemLink(item, canSell, true);
 }
 
@@ -8095,10 +8274,10 @@ bool PlayerbotAI::Talent(Creature* trainer)
 {
     if (!(m_bot->resetTalents()))
     {
-        WorldPacket* const packet = new WorldPacket(MSG_TALENT_WIPE_CONFIRM, 8 + 4);    //you do not have any talent
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(MSG_TALENT_WIPE_CONFIRM, 8 + 4));    //you do not have any talent
         *packet << uint64(0);
         *packet << uint32(0);
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet));
         return false;
     }
 
@@ -8154,11 +8333,11 @@ void PlayerbotAI::Repair(const uint32 itemid, Creature* rCreature)
 
     ObjectGuid itemGuid = (rItem) ? rItem->GetObjectGuid() : ObjectGuid();
 
-    WorldPacket* const packet = new WorldPacket(CMSG_REPAIR_ITEM, 8 + 8 + 1);
+    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_REPAIR_ITEM, 8 + 8 + 1));
     *packet << rCreature->GetObjectGuid();  // repair npc guid
     *packet << itemGuid; // if item specified then repair this, else repair all
     *packet << UseGuild;  // guildbank yes=1 no=0
-    m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+    m_bot->GetSession()->QueuePacket(std::move(packet));  // queue the packet to get around race condition
 }
 
 bool PlayerbotAI::RemoveAuction(const uint32 auctionid)
@@ -8483,7 +8662,7 @@ void PlayerbotAI::AddAuction(const uint32 itemid, Creature* aCreature)
         out << " with " << aCreature->GetCreatureInfo()->Name;
         TellMaster(out.str().c_str());
 
-        WorldPacket* const packet = new WorldPacket(CMSG_AUCTION_SELL_ITEM, 8 + 4 + 8 + 4 + 4 + 4 + 4);
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_AUCTION_SELL_ITEM, 8 + 4 + 8 + 4 + 4 + 4 + 4));
         *packet << aCreature->GetObjectGuid();     // auctioneer guid
         *packet << uint32(1);                      // const 1
         *packet << aItem->GetObjectGuid();         // item guid
@@ -8492,7 +8671,7 @@ void PlayerbotAI::AddAuction(const uint32 itemid, Creature* aCreature)
         *packet << uint32((max > min) ? max : min);  // buyout
         *packet << uint32(etime);  // auction duration
 
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet));  // queue the packet to get around race condition
     }
 }
 
@@ -8556,10 +8735,31 @@ void PlayerbotAI::Sell(const uint32 itemid)
     {
         std::ostringstream report;
 
-        uint32 cost = pItem->GetCount() * pItem->GetProto()->SellPrice;
-        m_bot->ModifyMoney(cost);
+        ItemPrototype const* pProto = pItem->GetProto();
+
+        if (!pProto)
+            return;
+
+        uint32 cost = pItem->GetProto()->SellPrice * pItem->GetCount();
+
+        // handle spell charge if any
+        for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+        {
+            auto const &spell = pProto->Spells[i];
+
+            // if spell charges for this item are negative, it means that the item should be destroyed once the charges are consumed.
+            // it also means that the value of this item is relative to how many charges are remaining.
+            if (spell.SpellId != 0 && spell.SpellCharges < 0)
+            {
+                auto const multiplier = static_cast<float>(pItem->GetSpellCharges(i)) / spell.SpellCharges;
+                cost *= multiplier;
+                break;
+            }
+        }
+
         m_bot->MoveItemFromInventory(pItem->GetBagSlot(), pItem->GetSlot(), true);
         m_bot->AddItemToBuyBackSlot(pItem, cost);
+        m_bot->ModifyMoney(cost);
 
         report << "Sold ";
         MakeItemLink(pItem, report, true);
@@ -8903,6 +9103,9 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
         _HandleCommandAttack(input, fromPlayer);
     else if (ExtractCommand("pull", input))
         _HandleCommandPull(input, fromPlayer);
+
+    else if (ExtractCommand("neutralize", input) || ExtractCommand("neutral", input))
+        _HandleCommandNeutralize(input, fromPlayer);
 
     else if (ExtractCommand("cast", input, true)) // true -> "cast" OR "c"
         _HandleCommandCast(input, fromPlayer);
@@ -9426,6 +9629,62 @@ void PlayerbotAI::_HandleCommandPull(std::string &text, Player &fromPlayer)
     //(4b) if dps, wait until the target is in melee range of the tank +2seconds or until tank no longer holds aggro
     //(4c) if healer, do healing checks
     //(5) when target is in melee range of tank, wait 2 seconds (healers continue to do group heal checks, all do self-heal checks), then return to normal functioning
+}
+
+void PlayerbotAI::_HandleCommandNeutralize(std::string &text, Player &fromPlayer)
+{
+    if (!m_bot) return;
+
+    if (text != "")
+    {
+        SendWhisper("See 'help neutralize' for details on using the neutralize command.", fromPlayer);
+        return;
+    }
+
+    // Check for valid target
+    m_bot->SetSelectionGuid(fromPlayer.GetSelectionGuid());
+    ObjectGuid selectOnGuid = m_bot->GetSelectionGuid();
+    if (!selectOnGuid)
+    {
+        SendWhisper("No target is selected.", fromPlayer);
+        return;
+    }
+
+    Unit* thingToNeutralize = ObjectAccessor::GetUnit(*m_bot, selectOnGuid);
+    if (!thingToNeutralize)
+    {
+        SendWhisper("No valid target is selected.", fromPlayer);
+        return;
+    }
+
+    if (m_bot->IsFriendlyTo(thingToNeutralize))
+    {
+        SendWhisper("I can't neutralize that target: this is a friend to me.", fromPlayer);
+        return;
+    }
+
+    if (!m_bot->IsWithinLOSInMap(thingToNeutralize))
+    {
+        SendWhisper("I can't see that target!", fromPlayer);
+        return;
+    }
+    
+    if (IsNeutralized(thingToNeutralize))
+    {
+        SendWhisper("Target is already neutralized.", fromPlayer);
+        return;
+    }
+
+    m_targetGuidCommand = selectOnGuid;
+
+    // All checks passed: call the Neutralize function of each bot class
+    // to define what spellid to use if available and if creature type is correct
+    // m_spellIdCommand will be defined there and UpdateAI will then handle the cast
+    if (!CastNeutralize())
+    {
+        SendWhisper("Something went wrong: I can't neutralize that target.", fromPlayer);
+        return;
+    }
 }
 
 void PlayerbotAI::_HandleCommandCast(std::string &text, Player &fromPlayer)
@@ -10928,9 +11187,9 @@ void PlayerbotAI::_HandleCommandPet(std::string &text, Player &fromPlayer)
     if (ExtractCommand("abandon", text))
     {
         // abandon pet
-        WorldPacket* const packet = new WorldPacket(CMSG_PET_ABANDON, 8);
+        std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_PET_ABANDON, 8));
         *packet << pet->GetObjectGuid();
-        m_bot->GetSession()->QueuePacket(std::move(std::make_unique<WorldPacket>(*packet))); // queue the packet to get around race condition
+        m_bot->GetSession()->QueuePacket(std::move(packet));
     }
     else if (ExtractCommand("react", text))
     {
@@ -11768,6 +12027,16 @@ void PlayerbotAI::_HandleCommandHelp(std::string &text, Player &fromPlayer)
             ch.SendSysMessage(_HandleCommandHelpHelper("pull test", "I'll tell you if I could pull at all. Can be used anywhere.").c_str());
             ch.SendSysMessage(_HandleCommandHelpHelper("pull ready", "I'll tell you if I'm ready to pull *right now*. To be used on location with valid target.").c_str());
             if (text != "") ch.SendSysMessage(sInvalidSubcommand.c_str());
+            return;
+        }
+    }
+    if (bMainHelp || ExtractCommand("neutralize", text))
+    {
+        SendWhisper(_HandleCommandHelpHelper("neutralize|neutral", "The bot will try to put its master's target out of combat with crowd control abilities like polymorph, banish, hibernate, shackles and the like.", HL_TARGET), fromPlayer);
+
+        if (!bMainHelp)
+        {
+            if (text != "") SendWhisper(sInvalidSubcommand, fromPlayer);
             return;
         }
     }

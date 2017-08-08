@@ -1,7 +1,7 @@
 #include "PlayerbotShamanAI.h"
-#include "Spells/SpellAuras.h"
 #include "PlayerbotDeathKnightAI.h"
-#include "Entities/Totem.h"
+#include "../Spells/SpellAuras.h"
+#include "../Entities/Totem.h"
 
 class PlayerbotAI;
 PlayerbotShamanAI::PlayerbotShamanAI(Player* const master, Player* const bot, PlayerbotAI* const ai) : PlayerbotClassAI(master, bot, ai)
@@ -536,9 +536,6 @@ void PlayerbotShamanAI::DoNonCombatActions()
     }
 
     // hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-
     if (EatDrinkBandage())
         return;
 } // end DoNonCombatActions

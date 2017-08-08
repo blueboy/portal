@@ -208,6 +208,16 @@ CombatManeuverReturns PlayerbotWarlockAI::DoNextCombatManeuverPVE(Unit *pTarget)
             return CastSpell(SHOOT, pTarget);
         }
     }
+    
+    // Create soul shard 
+    uint8 freeSpace = m_ai->GetFreeBagSpace();
+    if (DRAIN_SOUL && pTarget->GetHealth() < pTarget->GetMaxHealth() * 0.20 && m_ai->In_Reach(pTarget, DRAIN_SOUL) && 
+        !pTarget->HasAura(DRAIN_SOUL) && (shardCount < MAX_SHARD_COUNT && freeSpace > 0) && CastSpell(DRAIN_SOUL, pTarget))
+    {
+        m_ai->SetIgnoreUpdateTime(15);
+        return RETURN_CONTINUE;
+    }
+
 
     // Damage Spells
     switch (spec)
@@ -496,7 +506,19 @@ void PlayerbotWarlockAI::DoNonCombatActions()
     {
         Item* const stone = m_ai->FindConsumable(SPELLSTONE_DISPLAYID);
         Item* const stone2 = m_ai->FindConsumable(FIRESTONE_DISPLAYID);
-        if (!stone && !stone2)
+        uint8 spellstone_count = m_bot->GetItemCount(SPELLSTONE, false, nullptr);
+        if (spellstone_count == 0)
+            spellstone_count = m_bot->GetItemCount(GREATER_SPELLSTONE, false, nullptr);
+        if (spellstone_count == 0)
+            spellstone_count = m_bot->GetItemCount(MAJOR_SPELLSTONE, false, nullptr);
+        uint8 firestone_count = m_bot->GetItemCount(LESSER_FIRESTONE, false, nullptr);
+        if (firestone_count == 0)
+            firestone_count = m_bot->GetItemCount(FIRESTONE, false, nullptr);
+        if (firestone_count == 0)
+            firestone_count = m_bot->GetItemCount(GREATER_FIRESTONE, false, nullptr);
+        if (firestone_count == 0)
+            firestone_count = m_bot->GetItemCount(MAJOR_FIRESTONE, false, nullptr);
+        if (spellstone_count == 0 && firestone_count == 0)
         {
             if (CREATE_SPELLSTONE && shardCount > 0 && m_ai->CastSpell(CREATE_SPELLSTONE))
                 return;
@@ -505,18 +527,15 @@ void PlayerbotWarlockAI::DoNonCombatActions()
         }
         else if (stone)
         {
-            m_ai->UseItem(stone, EQUIPMENT_SLOT_MAINHAND);
+            m_ai->UseItem(stone, EQUIPMENT_SLOT_OFFHAND);
             return;
         }
         else
         {
-            m_ai->UseItem(stone2, EQUIPMENT_SLOT_MAINHAND);
+            m_ai->UseItem(stone2, EQUIPMENT_SLOT_OFFHAND);
             return;
         }
     }
-
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
 
     // hp/mana check
     if (pet && DARK_PACT && (pet->GetPower(POWER_MANA) / pet->GetMaxPower(POWER_MANA)) > 40 && m_ai->GetManaPercent() <= 50)

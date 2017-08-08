@@ -365,9 +365,6 @@ void PlayerbotRogueAI::DoNonCombatActions()
         m_bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
 
     // hp check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-
     if (EatDrinkBandage(false))
         return;
 

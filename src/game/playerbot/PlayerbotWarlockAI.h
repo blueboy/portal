@@ -4,7 +4,14 @@
 #include "PlayerbotClassAI.h"
 
 #define SOUL_SHARD 6265
-#define MAX_SHARD_COUNT 4 // Maximum soul shard count bot should keep
+#define SPELLSTONE 5522
+#define GREATER_SPELLSTONE 13602
+#define MAJOR_SPELLSTONE 13603
+#define LESSER_FIRESTONE 1254
+#define FIRESTONE 13699
+#define GREATER_FIRESTONE 13700
+#define MAJOR_FIRESTONE 13701
+#define MAX_SHARD_COUNT 10 // Maximum soul shard count bot should keep
 
 enum
 {
@@ -16,8 +23,8 @@ enum
 
 enum StoneDisplayId
 {
-    FIRESTONE_DISPLAYID   = 7409,
-    SPELLSTONE_DISPLAYID  = 13291,
+    FIRESTONE_DISPLAYID   = 24380,
+    SPELLSTONE_DISPLAYID  = 21610,
     SOULSTONE_DISPLAYID   = 6009,
     HEALTHSTONE_DISPLAYID = 8026
 };

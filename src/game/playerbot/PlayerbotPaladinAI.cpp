@@ -6,7 +6,7 @@
  */
 #include "PlayerbotPaladinAI.h"
 #include "PlayerbotMgr.h"
-#include "Spells/SpellAuras.h"
+#include "../Spells/SpellAuras.h"
 
 class PlayerbotAI;
 
@@ -167,6 +167,9 @@ CombatManeuverReturns PlayerbotPaladinAI::DoFirstCombatManeuverPVP(Unit* /*pTarg
 
 CombatManeuverReturns PlayerbotPaladinAI::DoNextCombatManeuver(Unit *pTarget)
 {
+
+    if (CheckSeals())
+        return RETURN_CONTINUE;
     switch (m_ai->GetScenarioType())
     {
         case PlayerbotAI::SCENARIO_PVP_DUEL:
@@ -436,38 +439,33 @@ void PlayerbotPaladinAI::CheckAuras()
 
 }
 
-void PlayerbotPaladinAI::CheckSeals()
+bool PlayerbotPaladinAI::CheckSeals()
 {
-    if (!m_ai)  return;
-    if (!m_bot) return;
+    if (!m_ai)  return false;
+    if (!m_bot) return false;
 
     uint32 spec = m_bot->GetSpec();
-    uint32 RACIAL = (SEAL_OF_CORRUPTION > 0) ? SEAL_OF_CORRUPTION : SEAL_OF_VENGEANCE;
 
     switch (spec)
     {
         case PALADIN_SPEC_HOLY:
-            //I'm not even sure if holy uses seals?
-            if (SEAL_OF_WISDOM > 0 && !m_bot->HasAura(SEAL_OF_WISDOM, EFFECT_INDEX_0))
-                m_ai->CastSpell(SEAL_OF_WISDOM, *m_bot);
+            if (SEAL_OF_WISDOM > 0 && !m_bot->HasAura(SEAL_OF_WISDOM, EFFECT_INDEX_0) && m_ai->CastSpell(SEAL_OF_WISDOM, *m_bot))
+                return true;
             break;
 
         case PALADIN_SPEC_PROTECTION:
-            if (RACIAL > 0 && !m_bot->HasAura(RACIAL, EFFECT_INDEX_0))
-                m_ai->CastSpell(RACIAL, *m_bot);
-            else if (SEAL_OF_RIGHTEOUSNESS > 0 && !m_bot->HasAura(SEAL_OF_RIGHTEOUSNESS, EFFECT_INDEX_0) && !m_bot->HasAura(RACIAL, EFFECT_INDEX_0))
-                m_ai->CastSpell(SEAL_OF_RIGHTEOUSNESS, *m_bot);
+            if (SEAL_OF_RIGHTEOUSNESS > 0 && !m_bot->HasAura(SEAL_OF_RIGHTEOUSNESS, EFFECT_INDEX_0) && m_ai->CastSpell(SEAL_OF_RIGHTEOUSNESS, *m_bot))
+                return true;
             break;
 
         case PALADIN_SPEC_RETRIBUTION:
-            if (RACIAL > 0 && !m_bot->HasAura(RACIAL, EFFECT_INDEX_0))
-                m_ai->CastSpell(RACIAL, *m_bot);
-            else if (SEAL_OF_COMMAND > 0 && !m_bot->HasAura(SEAL_OF_COMMAND, EFFECT_INDEX_0) && !m_bot->HasAura(RACIAL, EFFECT_INDEX_0))
-                m_ai->CastSpell(SEAL_OF_COMMAND, *m_bot);
-            else if (SEAL_OF_RIGHTEOUSNESS > 0 && !m_bot->HasAura(SEAL_OF_RIGHTEOUSNESS, EFFECT_INDEX_0) && !m_bot->HasAura(SEAL_OF_COMMAND, EFFECT_INDEX_0) && !m_bot->HasAura(RACIAL, EFFECT_INDEX_0))
-                m_ai->CastSpell(SEAL_OF_RIGHTEOUSNESS, *m_bot);
+            if (SEAL_OF_COMMAND > 0 && !m_bot->HasAura(SEAL_OF_COMMAND, EFFECT_INDEX_0) && m_ai->CastSpell(SEAL_OF_COMMAND, *m_bot))
+                return true;
+            else if (SEAL_OF_RIGHTEOUSNESS > 0 && !m_bot->HasAura(SEAL_OF_RIGHTEOUSNESS, EFFECT_INDEX_0) && !m_bot->HasAura(SEAL_OF_COMMAND, EFFECT_INDEX_0) && m_ai->CastSpell(SEAL_OF_RIGHTEOUSNESS, *m_bot))
+                return true;
             break;
     }
+    return false;
 }
 
 void PlayerbotPaladinAI::DoNonCombatActions()
@@ -476,9 +474,8 @@ void PlayerbotPaladinAI::DoNonCombatActions()
     if (!m_bot)  return;
 
     if (!m_bot->isAlive() || m_bot->IsInDuel()) return;
-
+    
     CheckAuras();
-    CheckSeals();
 
     //Put up RF if tank
     if (m_ai->GetCombatOrder() & PlayerbotAI::ORDERS_TANK)
@@ -510,9 +507,6 @@ void PlayerbotPaladinAI::DoNonCombatActions()
         return;
 
     // hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-
     if (EatDrinkBandage())
         return;
     // m_ai->TellMaster("DoNonCombatActions() - 10. past EatDrinkBandage()"); // debug
@@ -531,16 +525,11 @@ bool PlayerbotPaladinAI::BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *targe
     if (spellId == 0) return false;
     if (!target)      return false;
 
-    uint8 SPELL_BLESSING = 2; // See SpellSpecific enum in SpellMgr.h
-
     PlayerbotPaladinAI* c = (PlayerbotPaladinAI*) ai->GetClassAI();
     uint32 bigSpellId = 0;
 
-    //Pet* pet = target->GetPet();
-    //uint32 petSpellId = 0, petBigSpellId = 0;
-
-    if (ai->CanReceiveSpecificSpell(SPELL_BLESSING, target))
-        return false;
+    Pet* pet = target->GetPet();
+    uint32 petSpellId = 0, petBigSpellId = 0;
 
     // See which buff is appropriate according to class
     // TODO: take into account other paladins in the group
@@ -643,10 +632,13 @@ bool PlayerbotPaladinAI::BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *targe
     else if (spellId == c->BLESSING_OF_SANCTUARY)
         bigSpellId = c->GREATER_BLESSING_OF_SANCTUARY;
 
-    if (bigSpellId && ai->HasSpellReagents(bigSpellId) && (/*(petSpellId && ai->Buff(petBigSpellId, pet)) || */ai->Buff(bigSpellId, target)))
+    if (pet && !pet->HasAuraType(SPELL_AURA_MOD_UNATTACKABLE) && ai->HasSpellReagents(petBigSpellId) && ai->Buff(petBigSpellId, pet))
         return true;
-    else
-        return ( /*(petSpellId && ai->Buff(petSpellId, target)) || */ai->Buff(spellId, target) );
+    if (ai->HasSpellReagents(bigSpellId) && ai->Buff(bigSpellId, target))
+        return true;
+    if ((pet && !pet->HasAuraType(SPELL_AURA_MOD_UNATTACKABLE) && ai->Buff(petSpellId, pet)) || ai->Buff(spellId, target))
+        return true;
+    return false;
 }
 
 // Match up with "Pull()" below

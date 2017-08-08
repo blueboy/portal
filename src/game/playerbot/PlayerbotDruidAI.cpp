@@ -5,7 +5,7 @@
     Version : 0.42
  */
 #include "PlayerbotDruidAI.h"
-#include "Spells/SpellAuras.h"
+#include "../Spells/SpellAuras.h"
 
 class PlayerbotAI;
 
@@ -701,10 +701,14 @@ void PlayerbotDruidAI::DoNonCombatActions()
             return;// RETURN_CONTINUE;
     }
 
-    // Buff
-    if (m_bot->GetGroup() && GIFT_OF_THE_WILD && m_ai->HasSpellReagents(GIFT_OF_THE_WILD) && m_ai->Buff(GIFT_OF_THE_WILD, m_bot))
-        return;
-    if (Buff(&PlayerbotDruidAI::BuffHelper, MARK_OF_THE_WILD) & RETURN_CONTINUE)
+    // Buff group
+    // the check for group targets is performed by NeedGroupBuff (if group is found for bots by the function)
+    if (NeedGroupBuff(GIFT_OF_THE_WILD, MARK_OF_THE_WILD) && m_ai->HasSpellReagents(GIFT_OF_THE_WILD))
+    {
+        if (Buff(&PlayerbotDruidAI::BuffHelper, GIFT_OF_THE_WILD) & RETURN_CONTINUE)
+            return;
+    }
+    else if (Buff(&PlayerbotDruidAI::BuffHelper, MARK_OF_THE_WILD) & RETURN_CONTINUE)
         return;
     if (Buff(&PlayerbotDruidAI::BuffHelper, THORNS, (m_bot->GetGroup() ? JOB_TANK : JOB_ALL)) & RETURN_CONTINUE)
         return;
@@ -713,9 +717,6 @@ void PlayerbotDruidAI::DoNonCombatActions()
     CheckForms();
 
     // hp/mana check
-    if (m_bot->getStandState() != UNIT_STAND_STATE_STAND)
-        m_bot->SetStandState(UNIT_STAND_STATE_STAND);
-
     if (EatDrinkBandage())
         return;
 
