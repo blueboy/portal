@@ -57,6 +57,11 @@ GroupMemberStatus GetGroupMemberStatus(const Player *member = nullptr)
     return GroupMemberStatus(flags);
 }
 
+// Playerbot mod:
+#include "playerbot/PlayerbotMgr.h"
+#include "Config/Config.h"
+extern Config botConfig;
+
 //===================================================
 //============== Group ==============================
 //===================================================
