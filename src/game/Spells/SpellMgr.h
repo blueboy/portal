@@ -322,7 +322,7 @@ inline bool IsPassiveSpellStackableWithRanks(SpellEntry const* spellProto)
 
 inline bool IsSpellAffectedBySpellMods(SpellEntry const* spellInfo)
 {
-    return !(spellInfo->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_WITH_TRIGGERED) && IsPassiveSpell(spellInfo));
+    return !(spellInfo->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_FROM_TRIGGERED_SPECIAL) && IsPassiveSpell(spellInfo));
 }
 
 inline bool IsAutocastable(SpellEntry const* spellInfo)
@@ -1082,6 +1082,17 @@ inline bool IsPositiveSpell(uint32 spellId, const WorldObject* caster = nullptr,
     if (!spellId)
         return false;
     return IsPositiveSpell(sSpellTemplate.LookupEntry<SpellEntry>(spellId), caster, target);
+}
+
+inline bool IsSpellDoNotReportFailure(SpellEntry const* spellInfo)
+{
+    switch (spellInfo->Id)
+    {
+        case 32172:     // Thrallmars/Honor holds favor trigger spell
+            return true;
+        default:
+            return false;
+    }
 }
 
 inline bool IsDispelSpell(SpellEntry const* spellInfo)

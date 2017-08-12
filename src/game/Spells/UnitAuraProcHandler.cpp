@@ -349,7 +349,7 @@ pAuraProcHandler AuraProcHandler[TOTAL_AURAS] =
     &Unit::HandleNULLProc                                   //316 makes haste affect HOT/DOT ticks
 };
 
-bool Unit::IsTriggeredAtSpellProcEvent(Unit* pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent)
+bool Unit::IsTriggeredAtSpellProcEvent(Unit* pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent, bool dontTriggerSpecial)
 {
     SpellEntry const* spellProto = holder->GetSpellProto();
 
@@ -426,6 +426,10 @@ bool Unit::IsTriggeredAtSpellProcEvent(Unit* pVictim, SpellAuraHolder* holder, S
         modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_CHANCE_OF_SUCCESS, chance);
         modOwner->ApplySpellMod(spellProto->Id, SPELLMOD_FREQUENCY_OF_SUCCESS, chance);
     }
+
+    if (procSpell && dontTriggerSpecial && procSpell->HasAttribute(SPELL_ATTR_EX3_TRIGGERED_CAN_TRIGGER_SPECIAL))
+        if (!spellProto->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_FROM_TRIGGERED_SPECIAL))
+            return false;
 
     return roll_chance_f(chance);
 }
@@ -730,6 +734,31 @@ SpellAuraProcResult Unit::HandleDummyAuraProc(Unit* pVictim, uint32 damage, Aura
 
                     target = this;
                     triggered_spell_id = 33494;
+                    break;
+                }
+                // Elemental Sieve
+                case 36035:
+                {
+                    Creature* pCaster = dynamic_cast<Creature*>(triggeredByAura->GetCaster());
+
+                    // aura only affect the spirit totem, since this is the one that need to be in range.
+                    // It is possible though, that player is the one who should actually have the aura
+                    // and check for presense of spirit totem, but then we can't script the dummy.
+                    if (!pCaster->IsPet())
+                        return SPELL_AURA_PROC_FAILED;
+
+                    // Summon the soul of the spirit and cast the visual
+                    uint32 uiSoulEntry = 0;
+                    switch (GetEntry())
+                    {
+                        case 21050: uiSoulEntry = 21073; break; // Earthen Soul
+                        case 21061: uiSoulEntry = 21097; break; // Fiery Soul
+                        case 21059: uiSoulEntry = 21109; break; // Watery Soul
+                        case 21060: uiSoulEntry = 21116; break; // Airy Soul
+                    }
+
+                    CastSpell(this, 36206, TRIGGERED_OLD_TRIGGERED);
+                    pCaster->SummonCreature(uiSoulEntry, GetPositionX(), GetPositionY(), GetPositionZ(), 0, TEMPSUMMON_TIMED_OOC_OR_CORPSE_DESPAWN, 10000);
                     break;
                 }
                 // Vampiric Aura (boss spell)
@@ -2896,7 +2925,8 @@ SpellAuraProcResult Unit::HandleProcTriggerSpellAuraProc(Unit* pVictim, uint32 d
                 // case 34783: break:                   // Spell Reflection
                 // case 35205: break:                   // Vanish
                 // case 35321: break;                   // Gushing Wound
-                // case 36096: break:                   // Spell Reflection
+                case 36096:                             // Spell Reflection
+                    return SPELL_AURA_PROC_OK;          // Missing Trigger spell with no evidence to tell what to trigger, need to return to trigger consumption
                 // case 36207: break:                   // Steal Weapon
                 // case 36576: break:                   // Shaleskin (Shaleskin Flayer, Shaleskin Ripper) 30023 trigger
                 // case 37030: break;                   // Chaotic Temperament

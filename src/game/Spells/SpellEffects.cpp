@@ -1510,7 +1510,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                         return;
 
                     int32 basepoints0 = 100;
-                    m_caster->CastCustomSpell(unitTarget, 37675, &basepoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastCustomSpell(unitTarget, 37675, &basepoints0, nullptr, nullptr, (TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_HIT_CALCULATION));
                     return;
                 }
                 case 39096:                                 // Polarity Shift
@@ -2863,7 +2863,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     ((Creature*)unitTarget)->SetLootRecipient(m_caster);
 
                     unitTarget->setFaction(190);            // Ambient (neutral)
-                    unitTarget->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE);
+                    unitTarget->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
                     return;
                 }
                 case 62278:                                 // Lightning Orb Charger
@@ -3731,12 +3731,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     // 31989 -> dummy effect (step 1) + dummy effect (step 2) -> 31709 (taunt like spell for each target)
                     Unit* friendTarget = !unitTarget || unitTarget->IsFriendlyTo(m_caster) ? unitTarget : unitTarget->getVictim();
-                    if (friendTarget)
-                    {
-                        Player* player = friendTarget->GetBeneficiaryPlayer();
-                        if (!player || !player->IsInSameRaidWith((Player*)m_caster))
-                            friendTarget = nullptr;
-                    }
 
                     // non-standard cast requirement check
                     if (!friendTarget || friendTarget->getAttackers().empty())
@@ -3755,7 +3749,8 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     Unit::AttackerSet attackers = friendTarget->getAttackers();
 
                     // selected from list 3
-                    for (uint32 i = 0; i < std::min(size_t(3), attackers.size()); ++i)
+                    size_t size = std::min(size_t(3), attackers.size());
+                    for (uint32 i = 0; i < size; ++i)
                     {
                         Unit::AttackerSet::iterator aItr = attackers.begin();
                         std::advance(aItr, urand() % attackers.size());
@@ -5381,7 +5376,15 @@ void Spell::EffectOpenLock(SpellEffectIndex eff_idx)
 
     // mark item as unlocked
     if (itemTarget)
+    {
         itemTarget->SetFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED);
+
+        // only send loot if owner is player, else client sends release anyway
+        if (itemTarget->GetOwnerGuid() == m_caster->GetObjectGuid())
+            SendLoot(guid, LOOT_SKINNING, LockType(m_spellInfo->EffectMiscValue[eff_idx]));
+    }
+    else
+        SendLoot(guid, LOOT_SKINNING, LockType(m_spellInfo->EffectMiscValue[eff_idx]));
 
     // not allow use skill grow at item base open
     if (!m_CastItem && skillId != SKILL_NONE)
@@ -5403,8 +5406,6 @@ void Spell::EffectOpenLock(SpellEffectIndex eff_idx)
             }
         }
     }
-
-    SendLoot(guid, LOOT_SKINNING, LockType(m_spellInfo->EffectMiscValue[eff_idx]));
 }
 
 void Spell::EffectSummonChangeItem(SpellEffectIndex eff_idx)
@@ -5822,7 +5823,7 @@ bool Spell::DoSummonCritter(CreatureSummonPositions& list, SummonPropertiesEntry
     critter->SelectLevel();                                 // some summoned critters have different from 1 DB data for level/hp
     const CreatureInfo* info = critter->GetCreatureInfo();
     // Some companions have additional UNIT_FLAG_NON_ATTACKABLE (0x2), perphaps coming from template, so add template flags
-    critter->SetUInt32Value(UNIT_FIELD_FLAGS, (UNIT_FLAG_OOC_NOT_ATTACKABLE | UNIT_FLAG_PASSIVE | info->UnitFlags));
+    critter->SetUInt32Value(UNIT_FIELD_FLAGS, (UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC | info->UnitFlags));
     critter->SetUInt32Value(UNIT_NPC_FLAGS, info->NpcFlags);// some companions may have quests, so they need npc flags
     critter->InitPetCreateSpells();                         // some companions may have spells (e.g. disgusting oozeling)
     if (m_duration > 0)                                     // set timer for unsummon
@@ -5916,7 +5917,7 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
         {
             charmInfo->SetPetNumber(pet_number, false);
 
-            if (spawnCreature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PASSIVE))
+            if (spawnCreature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC))
                 charmInfo->SetReactState(REACT_PASSIVE);
             else if ((cInfo->ExtraFlags & CREATURE_EXTRA_FLAG_NO_MELEE) || petType == PROTECTOR_PET)
                 charmInfo->SetReactState(REACT_DEFENSIVE);
@@ -7391,6 +7392,43 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     m_caster->CastSpell(m_caster, spell_id, TRIGGERED_OLD_TRIGGERED, nullptr);
                     return;
                 }
+                case 10101:                                 // Knock Away variants
+                case 18670:
+                case 18813:
+                case 18945:
+                case 19633:
+                case 20686:
+                case 23382:
+                case 25778:
+                case 30121:                                 // Forceful Howl - Plagued Deathhound
+                case 31389:                                 // Knock Away
+                case 32077:                                 // Boglord Bash
+                case 32637:                                 // Overrun - Doomwalker
+                case 32959:                                 // Knock Away
+                case 37597:                                 // Meat Slap
+                case 40486:                                 // Eject - Bloodboil
+                {
+                    // Knock Away variants and derrivatives with scripted threat reduction component
+                    if (!unitTarget)
+                        return;
+                    // Default (most of the time) reduction is 50%. TODO: Verify when possible per spell
+                    int32 pct = -50;
+                    // A subset of spells has different values
+                    switch (m_spellInfo->Id)
+                    {
+                        case 19633:
+                        case 25778:
+                        case 31389:
+                        case 40486:
+                            pct = -25;
+                            break;
+                        case 32637:
+                            pct = -100;
+                            break;
+                    }
+                    m_caster->getThreatManager().modifyThreatPercent(unitTarget, pct);
+                    return;
+                }
                 case 17512:                                 // Piccolo of the Flaming Fire
                 {
                     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
@@ -7408,10 +7446,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->RemoveSpellsCausingAura(SPELL_AURA_MOD_DECREASE_SPEED);
                     return;
                 }
-                case 18670:
-                case 18945:
-                    m_caster->getThreatManager().modifyThreatPercent(unitTarget, -50);
-                    return;
                 case 22539:                                 // Shadow Flame (All script effects, not just end ones to
                 case 22972:                                 // prevent player from dodging the last triggered spell)
                 case 22975:
@@ -7614,15 +7648,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     }
 
                     unitTarget->CastSpell(unitTarget, spellid, TRIGGERED_NONE);
-                    return;
-                }
-                case 25778:                                 // Knock Away
-                {
-                    if (!unitTarget || m_caster->GetTypeId() != TYPEID_UNIT)
-                        return;
-
-                    if (m_caster->getThreatManager().getThreat(unitTarget))
-                        m_caster->getThreatManager().modifyThreatPercent(unitTarget, -50);
                     return;
                 }
                 case 26004:                                 // Mistletoe
@@ -7928,7 +7953,9 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     if (!unitTarget)
                         return;
 
-                    unitTarget->CastSpell(unitTarget, unitTarget->GetMap()->IsRegularDifficulty() ? 23971 : 30928, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_caster->GetObjectGuid());
+                    float x, y, z;
+                    unitTarget->GetPosition(x, y, z);
+                    unitTarget->CastSpell(x, y, z, unitTarget->GetMap()->IsRegularDifficulty() ? 23971 : 30928, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_caster->GetObjectGuid());
                     return;
                 }
                 case 35865:                                 // Summon Nether Vapor
@@ -8001,15 +8028,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         return;
 
                     m_caster->CastSpell(unitTarget, m_spellInfo->CalculateSimpleValue(eff_idx), TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 40486:                                 // Eject
-                {
-                    if (!unitTarget || m_caster->GetTypeId() != TYPEID_UNIT)
-                        return;
-
-                    if (m_caster->getThreatManager().getThreat(unitTarget))
-                        m_caster->getThreatManager().modifyThreatPercent(unitTarget, -40);
                     return;
                 }
                 case 41055:                                 // Copy Weapon
@@ -10395,7 +10413,7 @@ void Spell::EffectSanctuary(SpellEffectIndex /*eff_idx*/)
         return;
     // unitTarget->CombatStop();
 
-    unitTarget->CombatStop();
+    unitTarget->CombatStop(false, false);
     unitTarget->getHostileRefManager().deleteReferences();  // stop all fighting
 
     // Vanish allows to remove all threat and cast regular stealth so other spells can be used

@@ -1676,54 +1676,7 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* damageInfo, Weapo
             damageInfo->HitInfo |= HITINFO_GLANCING;
             damageInfo->TargetState = VICTIMSTATE_NORMAL;
             damageInfo->procEx |= PROC_EX_NORMAL_HIT;
-            // calculate base values and mods
-            float baseLowEnd = 1.3f;
-            float baseHighEnd = 1.2f;
-            switch (getClass())                             // lowering base values for casters
-            {
-                case CLASS_SHAMAN:
-                case CLASS_PRIEST:
-                case CLASS_MAGE:
-                case CLASS_WARLOCK:
-                case CLASS_DRUID:
-                    baseLowEnd  -= 0.7f;
-                    baseHighEnd -= 0.3f;
-                    break;
-            }
-
-            float maxLowEnd = 0.6f;
-            switch (getClass())                             // upper for melee classes
-            {
-                case CLASS_WARRIOR:
-                case CLASS_ROGUE:
-                    maxLowEnd = 0.91f;                      // If the attacker is a melee class then instead the lower value of 0.91
-            }
-
-            // calculate values
-            int32 attackerRating = GetWeaponSkillValue(damageInfo->attackType);
-            attackerRating = static_cast<std::uint32_t>(attackerRating) > getLevel() * 5 ? getLevel() * 5 : attackerRating; // cap rating at level * 5, done in 2.0.1
-            int32 diff = damageInfo->target->GetDefenseSkillValue() - attackerRating;
-            float lowEnd  = baseLowEnd - (0.05f * diff);
-            float highEnd = baseHighEnd - (0.03f * diff);
-
-            // apply max/min bounds
-            if (lowEnd < 0.01f)                             // the low end must not go bellow 0.01f
-                lowEnd = 0.01f;
-            else if (lowEnd > maxLowEnd)                    // the smaller value of this and 0.6 is kept as the low end
-                lowEnd = maxLowEnd;
-
-            if (highEnd < 0.2f)                             // high end limits
-                highEnd = 0.2f;
-            if (highEnd > 0.99f)
-                highEnd = 0.99f;
-
-            if (lowEnd > highEnd)                           // prevent negative range size
-                lowEnd = highEnd;
-
-            float reducePercent = lowEnd + rand_norm_f() * (highEnd - lowEnd);
-
-            damageInfo->cleanDamage += damageInfo->damage - uint32(reducePercent *  damageInfo->damage);
-            damageInfo->damage   = uint32(reducePercent *  damageInfo->damage);
+            CalculateGlanceAmount(damageInfo);
             break;
         }
         case MELEE_HIT_CRUSHING:
@@ -3423,6 +3376,38 @@ float Unit::CalculateEffectiveDazeChance(const Unit *victim, WeaponAttackType at
     return std::max(0.0f, std::min(chance, 40.0f));
 }
 
+uint32 Unit::CalculateGlanceAmount(CalcDamageInfo *meleeInfo) const
+{
+    if (!meleeInfo)
+        return 0;
+    // Post-2.0.1: capped skill value
+    const uint32 cap = GetMaxSkillValueForLevel();
+    const uint32 skill = std::min(GetWeaponSkillValue(meleeInfo->attackType, meleeInfo->target), cap);
+    const uint32 defense = meleeInfo->target->GetDefenseSkillValue(this);
+    const int32 difference = int32(defense - skill);
+    // Attacker's skill beats victim's defense: no action required
+    if (difference < 0)
+        return meleeInfo->damage;
+    // calculate base values and mods
+    const bool caster = (getClassMask() & CLASSMASK_WAND_USERS);
+    const float baseHighEnd = (caster ? 0.9f : 1.2f);
+    const float baseLowEnd = (caster ? 0.6f : 1.3f);
+    const float maxLowEnd = (caster ? 0.6f : 0.91f);
+
+    float highEnd = baseHighEnd - (0.03f * difference);
+    float lowEnd = baseLowEnd - (0.05f * difference);
+    // 0.2f <= highEnd <= 0.99f
+    highEnd = std::min(std::max(highEnd, 0.2f), 0.99f);
+    // 0.01f <= lowEnd <= maxLowEnd <= highEnd
+    lowEnd = std::min(std::max(lowEnd, 0.01f), std::min(maxLowEnd, highEnd));
+    // Roll for final glance damage multiplier and calculate amount of damage glancing blow will deal
+    const float multiplier = (urand(uint32(lowEnd * 100), uint32(highEnd * 100)) * 0.01f);
+    const uint32 result = uint32(meleeInfo->damage * multiplier);
+    meleeInfo->cleanDamage += (meleeInfo->damage - result);
+    meleeInfo->damage = result;
+    return result;
+}
+
 float Unit::CalculateAbilityDeflectChance(const Unit *attacker, const SpellEntry *ability) const
 {
     switch (ability->DmgClass)
@@ -4346,7 +4331,7 @@ void Unit::_UpdateAutoRepeatSpell()
         }
 
         // some check about new target are necessary
-        if (!currTarget || !currTarget->isTargetableForAttack() || currTarget->IsFriendlyTo(this))
+        if (!currTarget || !currTarget->isTargetableForAttack() || IsFriendlyTo(currTarget))
         {
             // no valid target
             InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
@@ -6183,15 +6168,15 @@ void Unit::SendPeriodicAuraLog(SpellPeriodicAuraLogInfo* pInfo) const
     aura->GetTarget()->SendMessageToSet(data, true);
 }
 
-void Unit::ProcDamageAndSpell(Unit* pVictim, uint32 procAttacker, uint32 procVictim, uint32 procExtra, uint32 amount, WeaponAttackType attType, SpellEntry const* procSpell)
+void Unit::ProcDamageAndSpell(Unit* pVictim, uint32 procAttacker, uint32 procVictim, uint32 procExtra, uint32 amount, WeaponAttackType attType, SpellEntry const* procSpell, bool dontTriggerSpecial)
 {
     // Not much to do if no flags are set.
     if (procAttacker)
-        ProcDamageAndSpellFor(false, pVictim, procAttacker, procExtra, attType, procSpell, amount);
+        ProcDamageAndSpellFor(false, pVictim, procAttacker, procExtra, attType, procSpell, amount, dontTriggerSpecial);
     // Now go on with a victim's events'n'auras
     // Not much to do if no flags are set or there is no victim
     if (pVictim && pVictim->isAlive() && procVictim)
-        pVictim->ProcDamageAndSpellFor(true, this, procVictim, procExtra, attType, procSpell, amount);
+        pVictim->ProcDamageAndSpellFor(true, this, procVictim, procExtra, attType, procSpell, amount, dontTriggerSpecial);
 }
 
 void Unit::SendSpellMiss(Unit* target, uint32 spellID, SpellMissInfo missInfo) const
@@ -6719,7 +6704,7 @@ void Unit::AttackedBy(Unit* attacker)
         pet->AttackedBy(attacker);
 }
 
-bool Unit::AttackStop(bool targetSwitch /*= false*/, bool includingCast /*= false*/)
+bool Unit::AttackStop(bool targetSwitch /*= false*/, bool includingCast /*= false*/, bool includingCombo /*= false*/)
 {
     // interrupt cast only id includingCast == true and we have something to interrupt.
     if (includingCast && IsNonMeleeSpellCasted(false))
@@ -6744,9 +6729,9 @@ bool Unit::AttackStop(bool targetSwitch /*= false*/, bool includingCast /*= fals
     return false;
 }
 
-void Unit::CombatStop(bool includingCast)
+void Unit::CombatStop(bool includingCast, bool includingCombo)
 {
-    AttackStop(true, includingCast);
+    AttackStop(true, includingCast, includingCombo);
     RemoveAllAttackers();
 
     if (GetTypeId() == TYPEID_PLAYER)
@@ -8679,9 +8664,6 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
 
     if (creatureNotInCombat)
     {
-        // should probably be removed for the attacked (+ it's party/group) only, not global
-        RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE);
-
         // client does not handle this state on it's own (reset to default at LoadCreatureAddon)
         if (getStandState() == UNIT_STAND_STATE_CUSTOM)
             SetStandState(UNIT_STAND_STATE_STAND);
@@ -8713,13 +8695,7 @@ void Unit::ClearInCombat()
 
     // Player's state will be cleared in Player::UpdateContestedPvP
     if (GetTypeId() == TYPEID_UNIT)
-    {
-        Creature* cThis = static_cast<Creature*>(this);
-        if (cThis->GetCreatureInfo()->UnitFlags & UNIT_FLAG_OOC_NOT_ATTACKABLE && !(cThis->GetTemporaryFactionFlags() & TEMPFACTION_TOGGLE_OOC_NOT_ATTACK))
-            SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE);
-
         clearUnitState(UNIT_STAT_ATTACK_PLAYER);
-    }
     else
         ((Player*)this)->UpdatePotionCooldown();
 
@@ -8734,8 +8710,7 @@ bool Unit::isTargetableForAttack(bool inverseAlive /*=false*/) const
     if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE))
         return false;
 
-    // to be removed if unit by any reason enter combat
-    if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE))
+    if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER))
         return false;
 
     // inversealive is needed for some spells which need to be casted at dead targets (aoe)
@@ -9606,7 +9581,7 @@ bool Unit::SelectHostileTarget()
 
     if (target)
     {
-        if (CanReactInCombat())
+        if (CanReactInCombat() && !hasUnitState(UNIT_STAT_DONT_TURN | UNIT_STAT_SEEKING_ASSISTANCE))
         {
             SetInFront(target);
             if (oldTarget != target)
@@ -10793,7 +10768,7 @@ uint32 createProcExtendMask(SpellNonMeleeDamage* damageInfo, SpellMissInfo missC
     return procEx;
 }
 
-void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* pTarget, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, SpellEntry const* procSpell, uint32 damage)
+void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* pTarget, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, SpellEntry const* procSpell, uint32 damage, bool dontTriggerSpecial)
 {
     // For melee/ranged based attack need update skills and set some Aura states
     if (!(procExtra & PROC_EX_CAST_END) && procFlag & MELEE_BASED_TRIGGER_MASK)
@@ -10872,7 +10847,7 @@ void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* pTarget, uint32 procFlag, 
 
         SpellProcEventEntry const* spellProcEvent = nullptr;
         // check if that aura is triggered by proc event (then it will be managed by proc handler)
-        if (!IsTriggeredAtSpellProcEvent(pTarget, itr->second, procSpell, procFlag, procExtra, attType, isVictim, spellProcEvent))
+        if (!IsTriggeredAtSpellProcEvent(pTarget, itr->second, procSpell, procFlag, procExtra, attType, isVictim, spellProcEvent, dontTriggerSpecial))
         {
             // spell seem not managed by proc system, although some case need to be handled
 

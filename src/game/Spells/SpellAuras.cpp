@@ -763,10 +763,12 @@ void AreaAura::Update(uint32 diff)
                     holder->SetInUse(false);
                 }
                 else
+                {
                     if ((*tIter)->AddSpellAuraHolder(holder))
                         holder->SetState(SPELLAURAHOLDER_STATE_READY);
                     else
                         delete holder;
+                }
             }
         }
         Aura::Update(diff);
@@ -1522,16 +1524,8 @@ void Aura::TriggerSpell()
 //                    case 36556: break;
 //                    // Cursed Scarab Despawn Periodic
 //                    case 36561: break;
-                    case 36573:                             // Vision Guide
-                    {
-                        if (GetAuraTicks() == 10 && target->GetTypeId() == TYPEID_PLAYER)
-                        {
-                            ((Player*)target)->AreaExploredOrEventHappens(10525);
-                            target->RemoveAurasDueToSpell(36573);
-                        }
-
-                        return;
-                    }
+//                    // Vision Guide
+//                    case 36573: break;
 //                    // Cannon Charging (platform)
 //                    case 36785: break;
 //                    // Cannon Charging (self)
@@ -2375,7 +2369,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         return;
                     case 62109:                             // Tails Up: Aura
                         target->setFaction(1990);           // Ambient (hostile)
-                        target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE);
+                        target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
                         return;
                     case 63122:                             // Clear Insane
                         target->RemoveAurasDueToSpell(GetSpellProto()->CalculateSimpleValue(m_effIndex));
@@ -3063,6 +3057,16 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
 
                     return;
                 }
+                case 32096:                                 // Thrallmar's Favor
+                case 32098:                                 // Honor Hold's Favor
+                    if (target->GetTypeId() == TYPEID_PLAYER)
+                    {
+                        if (apply) // cast/remove Buffbot Buff Effect
+                            target->CastSpell(target, 32172, TRIGGERED_NONE);
+                        else
+                            target->RemoveAurasDueToSpell(32172);
+                    }
+                    return;
                 case 35356:                                 // Spawn Feign Death
                 case 35357:                                 // Spawn Feign Death
                 case 42557:                                 // Feign Death
@@ -3162,7 +3166,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                     return;
                 }
                 case 43874:                                 // Scourge Mur'gul Camp: Force Shield Arcane Purple x3
-                    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_OOC_NOT_ATTACKABLE, apply);
+                    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER, apply);
                     if (apply)
                         target->addUnitState(UNIT_STAT_ROOT);
                     return;
@@ -5631,9 +5635,16 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
     // remove time effects
     else
     {
-        // Parasitic Shadowfiend - handle summoning of two Shadowfiends on DoT expire
-        if (spellProto->Id == 41917)
-            target->CastSpell(target, 41915, TRIGGERED_OLD_TRIGGERED);
+        switch (spellProto->Id)
+        {
+            case 35201: // Paralytic Poison
+                if (m_removeMode == AURA_REMOVE_BY_DEFAULT)
+                    target->CastSpell(target, 35202, TRIGGERED_OLD_TRIGGERED); // Paralysis
+                break;
+            case 41917: // Parasitic Shadowfiend - handle summoning of two Shadowfiends on DoT expire
+                target->CastSpell(target, 41915, TRIGGERED_OLD_TRIGGERED);
+                break;
+        }         
     }
 }
 
@@ -7340,16 +7351,6 @@ void Aura::PeriodicTick()
                 pdamage = target->MeleeDamageBonusTaken(pCaster, pdamage, attackType, spellProto, DOT, GetStackAmount());
             }
 
-            // Calculate armor mitigation if it is a physical spell
-            // But not for bleed mechanic spells
-            if (GetSpellSchoolMask(spellProto) & SPELL_SCHOOL_MASK_NORMAL &&
-                    GetEffectMechanic(spellProto, m_effIndex) != MECHANIC_BLEED)
-            {
-                uint32 pdamageReductedArmor = pCaster->CalcArmorReducedDamage(target, pdamage);
-                cleanDamage.damage += pdamage - pdamageReductedArmor;
-                pdamage = pdamageReductedArmor;
-            }
-
             // Curse of Agony damage-per-tick calculation
             if (spellProto->SpellFamilyName == SPELLFAMILY_WARLOCK && (spellProto->SpellFamilyFlags & uint64(0x0000000000000400)) && spellProto->SpellIconID == 544)
             {
@@ -7440,14 +7441,6 @@ void Aura::PeriodicTick()
             CleanDamage cleanDamage =  CleanDamage(0, BASE_ATTACK, MELEE_HIT_NORMAL);
 
             uint32 pdamage = m_modifier.m_amount > 0 ? m_modifier.m_amount : 0;
-
-            // Calculate armor mitigation if it is a physical spell
-            if (GetSpellSchoolMask(spellProto) & SPELL_SCHOOL_MASK_NORMAL)
-            {
-                uint32 pdamageReductedArmor = pCaster->CalcArmorReducedDamage(target, pdamage);
-                cleanDamage.damage += pdamage - pdamageReductedArmor;
-                pdamage = pdamageReductedArmor;
-            }
 
             pdamage = target->SpellDamageBonusTaken(pCaster, spellProto, pdamage, DOT, GetStackAmount());
 
@@ -7869,7 +7862,7 @@ void Aura::PeriodicTick()
             // Anger Management
             // amount = 1+ 16 = 17 = 3,4*5 = 10,2*5/3
             // so 17 is rounded amount for 5 sec tick grow ~ 1 range grow in 3 sec
-            if (powerType == POWER_RAGE)
+            if (powerType == POWER_RAGE && target->isInCombat())
                 target->ModifyPower(powerType, m_modifier.m_amount * 3 / 5);
             // Butchery
             else if (powerType == POWER_RUNIC_POWER && target->isInCombat())

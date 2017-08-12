@@ -35,11 +35,6 @@
 	extern Config botConfig;
 #endif
 
-// Playerbot mod:
-#include "playerbot/PlayerbotMgr.h"
-#include "Config/Config.h"
-extern Config botConfig;
-
 GroupMemberStatus GetGroupMemberStatus(const Player *member = nullptr)
 {
     uint8 flags = MEMBER_STATUS_OFFLINE;
