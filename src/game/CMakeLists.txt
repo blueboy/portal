@@ -58,6 +58,17 @@ if(NOT BUILD_SCRIPTDEV)
   endforeach()
 endif()
 
+if(NOT BUILD_PLAYERBOT)
+  # exclude Playerbot folder
+  set (EXCLUDE_DIR "PlayerBot/")
+  foreach (TMP_PATH ${LIBRARY_SRCS})
+      string (FIND ${TMP_PATH} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
+      if (NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
+          list(REMOVE_ITEM LIBRARY_SRCS ${TMP_PATH})
+      endif ()
+  endforeach()
+endif()
+
 # Create visual studio groups using folder structure
 foreach(source ${LIBRARY_SRCS})
     get_filename_component(source_path "${source}" PATH)
@@ -88,6 +99,11 @@ endif()
 # Define BUILD_SCRIPTDEV if need
 if (BUILD_SCRIPTDEV)
   add_definitions(-DBUILD_SCRIPTDEV)
+endif()
+
+# Define BUILD_PLAYERBOT if need
+if (BUILD_PLAYERBOT)
+  add_definitions(-DBUILD_PLAYERBOT)
 endif()
 
 # Generate precompiled header

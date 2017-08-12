@@ -1389,12 +1389,13 @@ void World::SetInitialWorldSettings()
     // Delete all characters which have been deleted X days before
     Player::DeleteOldCharacters();
 
-    PlayerbotMgr::SetInitialWorldSettings();
-
     sLog.outString("Initialize AuctionHouseBot...");
     sAuctionBot.Initialize();
     sLog.outString();
 
+#ifdef BUILD_PLAYERBOT
+    PlayerbotMgr::SetInitialWorldSettings();
+#endif
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");
